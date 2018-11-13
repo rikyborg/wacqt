@@ -2,6 +2,7 @@ from __future__ import division, print_function
 
 import ctypes
 import os
+import sys
 import time
 
 import numpy as np
@@ -666,8 +667,14 @@ class SimulationParameters(object):
 
 
 # Load the C library and set arguments and return types
+if sys.platform == 'win32':
+    my_ext = '.dll'
+elif sys.platform == 'darwin':
+    my_ext = '.bundle'
+elif sys.platform.startswith('linux'):
+    my_ext = '.so'
 curr_folder = os.path.realpath(os.path.dirname(__file__))
-lib_path = os.path.join(curr_folder, "sim_cvode.so")
+lib_path = os.path.join(curr_folder, "sim_cvode" + my_ext)
 c_lib = ctypes.cdll.LoadLibrary(lib_path)
 c_lib.integrate_cvode.restype = ctypes.c_int
 c_lib.integrate_cvode.argtypes = [
