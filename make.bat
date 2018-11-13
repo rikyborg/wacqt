@@ -10,11 +10,10 @@ GOTO DONE
 
 :COMPILE
 
-set INCLUDES=-I"win/include"
+set INCLUDES=-I"win64/include"
 set CFLAGS=-std=gnu99 -Wall
 set LDFLAGS=-shared
-REM set LIBS= -L"win/lib" -lsundials_cvode -lsundials_nvecserial -lgsl -lm
-set LIBS= "win/lib/libsundials_cvode.dll.a" "win/lib/libsundials_nvecserial.dll.a" "win/lib/libgsl.dll.a" -lm
+set LIBS= -L"win64/lib" -lsundials_cvode -lsundials_nvecserial -lgsl -lm
 
 echo on
 

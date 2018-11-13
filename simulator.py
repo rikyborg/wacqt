@@ -667,15 +667,18 @@ class SimulationParameters(object):
 
 
 # Load the C library and set arguments and return types
+curr_folder = os.path.realpath(os.path.dirname(__file__))
 if sys.platform == 'win32':
     my_ext = '.dll'
+    lib_path = os.path.join(curr_folder, "win64", "lib")
+    if lib_path not in os.environ['path']:
+        os.environ['path'] = ";".join((os.environ['path'], lib_path))
 elif sys.platform == 'darwin':
     my_ext = '.bundle'
 elif sys.platform.startswith('linux'):
     my_ext = '.so'
-curr_folder = os.path.realpath(os.path.dirname(__file__))
-lib_path = os.path.join(curr_folder, "sim_cvode" + my_ext)
-c_lib = ctypes.cdll.LoadLibrary(lib_path)
+load_path = os.path.join(curr_folder, "sim_cvode" + my_ext)
+c_lib = ctypes.cdll.LoadLibrary(load_path)
 c_lib.integrate_cvode.restype = ctypes.c_int
 c_lib.integrate_cvode.argtypes = [
     ctypes.c_void_p,  # para
