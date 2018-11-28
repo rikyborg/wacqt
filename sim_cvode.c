@@ -29,6 +29,7 @@
 #define ID_LINEAR 0
 #define ID_DUFFING 1
 #define ID_JOSEPHSON 2
+#define ID_JOSEPHSON_BOTH 3
 
 #define ID_NO_DRIVE 0
 #define ID_LOCKIN 1
@@ -72,7 +73,7 @@ typedef struct SimPara {
     gsl_interp_accel* drive_acc;  // internal
 
     /* Select system */
-    int sys_id;  // ID_LINEAR, ID_DUFFING or ID_JOSEPHSON
+    int sys_id;  // ID_LINEAR, ID_DUFFING, ID_JOSEPHSON or ID_JOSEPHSON_BOTH
 
     /* Duffing: V/L * (1. - duff * V*V) */
     realtype duff;  // V^-2
@@ -407,6 +408,99 @@ static int jac_josephson(long int N, realtype t,
 }
 
 
+static int ode_josephson_both(realtype t, N_Vector y, N_Vector ydot, void* user_data) {
+    SimPara* para = (SimPara*) user_data;
+
+    realtype P1 = NV_Ith_S(y, 0);
+    realtype V1 = NV_Ith_S(y, 1);
+    realtype P2 = NV_Ith_S(y, 2);
+    realtype V2 = NV_Ith_S(y, 3);
+
+    realtype V0_dot = V_dot_drive(t, para);
+    realtype Vn1, Vn2;
+    if (para->add_thermal_noise == true) {
+        Vn1 = V_noise(t, 1, para);
+        Vn2 = V_noise(t, 2, para);
+    } else {
+        Vn1 = 0.;
+        Vn2 = 0.;
+    }
+
+    realtype Cl = para->Cl;
+    realtype Cr = para->Cr;
+    realtype R1 = para->R1;
+    realtype L1 = para->L1;
+    realtype C1 = para->C1;
+    realtype R2 = para->R2;
+    realtype L2 = para->L2;
+    realtype C2 = para->C2;
+
+    realtype Csum1 = C1 + Cl + Cr;
+    realtype Csum2 = C2 + Cr;
+    realtype g0 = 1. / (1. - Cr*Cr / (Csum1 * Csum2));
+    realtype g1 = Cr / Csum1;
+    realtype g2 = Cr / Csum2;
+
+    realtype PHI0 = para->phi0;
+
+    NV_Ith_S(ydot, 0) = V1;
+    NV_Ith_S(ydot, 1) = g0 * (-sin(2.*M_PI*P1/PHI0)*PHI0/(2.*M_PI*Csum1*L1) - (V1+Vn1) / (Csum1 * R1) + Cl / Csum1 * V0_dot + g1 * (-sin(2.*M_PI*P2/PHI0)*PHI0/(2.*M_PI*Csum2*L2) - (V2+Vn2) / (Csum2 * R2)));
+    NV_Ith_S(ydot, 2) = V2;
+    NV_Ith_S(ydot, 3) = g0 * (-sin(2.*M_PI*P2/PHI0)*PHI0/(2.*M_PI*Csum2*L2) - (V2+Vn2) / (Csum2 * R2) + g2 * (-sin(2.*M_PI*P1/PHI0)*PHI0/(2.*M_PI*Csum1*L1) - (V1+Vn1) / (Csum1 * R1) + Cl / Csum1 * V0_dot));
+
+    return(0);
+}
+
+
+static int jac_josephson_both(long int N, realtype t,
+               N_Vector y, N_Vector fy, DlsMat J, void* user_data,
+               N_Vector tmp1, N_Vector tmp2, N_Vector tmp3) {
+    SimPara* para = (SimPara*) user_data;
+
+    realtype P1 = NV_Ith_S(y, 0);
+    realtype P2 = NV_Ith_S(y, 2);
+
+    realtype Cl = para->Cl;
+    realtype Cr = para->Cr;
+    realtype R1 = para->R1;
+    realtype L1 = para->L1;
+    realtype C1 = para->C1;
+    realtype R2 = para->R2;
+    realtype L2 = para->L2;
+    realtype C2 = para->C2;
+
+    realtype Csum1 = C1 + Cl + Cr;
+    realtype Csum2 = C2 + Cr;
+    realtype g0 = 1. / (1. - Cr*Cr / (Csum1 * Csum2));
+    realtype g1 = Cr / Csum1;
+    realtype g2 = Cr / Csum2;
+
+    realtype PHI0 = para->phi0;
+
+    DENSE_ELEM(J, 0, 0) = RCONST(0.);
+    DENSE_ELEM(J, 0, 1) = RCONST(1.);
+    DENSE_ELEM(J, 0, 2) = RCONST(0.);
+    DENSE_ELEM(J, 0, 3) = RCONST(0.);
+
+    DENSE_ELEM(J, 1, 0) = -g0 / (Csum1 * L1) * cos(2.*M_PI*P1/PHI0);
+    DENSE_ELEM(J, 1, 1) = -g0 / (Csum1 * R1);
+    DENSE_ELEM(J, 1, 2) = -g0 * g1 / (Csum2 * L2) * cos(2.*M_PI*P2/PHI0);
+    DENSE_ELEM(J, 1, 3) = -g0 * g1 / (Csum2 * R2);
+
+    DENSE_ELEM(J, 2, 0) = RCONST(0.);
+    DENSE_ELEM(J, 2, 1) = RCONST(0.);
+    DENSE_ELEM(J, 2, 2) = RCONST(0.);
+    DENSE_ELEM(J, 2, 3) = RCONST(1.);
+
+    DENSE_ELEM(J, 3, 0) = -g0 * g2 / (Csum1 * L1) * cos(2.*M_PI*P1/PHI0);
+    DENSE_ELEM(J, 3, 1) = -g0 * g2 / (Csum1 * R1);
+    DENSE_ELEM(J, 3, 2) = -g0 / (Csum2 * L2) * cos(2.*M_PI*P2/PHI0);
+    DENSE_ELEM(J, 3, 3) = -g0 / (Csum2 * R2);
+
+    return(0);
+}
+
+
 int integrate_cvode(void* user_data,
                     realtype* y0, realtype* tout_arr,
                     realtype* outdata, int nout,
@@ -447,6 +541,8 @@ int integrate_cvode(void* user_data,
         flag = CVodeInit(cvode_mem, ode_duffing, T0, y);
     } else if (para->sys_id == ID_JOSEPHSON) {
         flag = CVodeInit(cvode_mem, ode_josephson, T0, y);
+    } else if (para->sys_id == ID_JOSEPHSON_BOTH) {
+        flag = CVodeInit(cvode_mem, ode_josephson_both, T0, y);
     } else {
         printf("*** UNKNOWN FORCE ID: %d ***\n", para->sys_id);
         return(1);
@@ -473,6 +569,8 @@ int integrate_cvode(void* user_data,
         flag = CVDlsSetDenseJacFn(cvode_mem, jac_duffing);
     } else if (para->sys_id == ID_JOSEPHSON) {
         flag = CVDlsSetDenseJacFn(cvode_mem, jac_josephson);
+    } else if (para->sys_id == ID_JOSEPHSON_BOTH) {
+        flag = CVDlsSetDenseJacFn(cvode_mem, jac_josephson_both);
     } else {
         printf("*** UNKNOWN FORCE ID: %d ***\n", para->sys_id);
         return(1);

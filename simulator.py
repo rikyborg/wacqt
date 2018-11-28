@@ -1,5 +1,6 @@
 from __future__ import division, print_function
 
+from copy import copy
 import ctypes
 import os
 import sys
@@ -14,6 +15,7 @@ ID_NOT_SET = -1
 ID_LINEAR = 0
 ID_DUFFING = 1
 ID_JOSEPHSON = 2
+ID_JOSEPHSON_BOTH = 3
 
 ID_NO_DRIVE = 0
 ID_LOCKIN = 1
@@ -64,12 +66,19 @@ class SimulationParameters(object):
         self.Csum1 = self.C1 + self.Cl + self.Cr
         self.Csum2 = self.C2 + self.Cr
 
-        self.w01 = np.sqrt(1. / (self.C1 * self.L1))  # rad/s, bare cavity 1 resonance frequency
-        self.f01 = self.w01 / 2. / np.pi  # Hz, bare cavity 1 resonance frequency
-        self.Q1 = self.R1 * np.sqrt(self.C1 / self.L1)  # bare cavity 1 quality factor
-        self.w02 = np.sqrt(1. / (self.C2 * self.L2))  # rad/s, bare cavity 2 resonance frequency
-        self.f02 = self.w02 / 2. / np.pi  # Hz, bare cavity 2 resonance frequency
-        self.Q2 = self.R2 * np.sqrt(self.C2 / self.L2)  # bare cavity 2 quality factor
+        self.w01_b = np.sqrt(1. / (self.C1 * self.L1))  # rad/s, bare cavity 1 resonance frequency
+        self.f01_b = self.w01_b / 2. / np.pi  # Hz, bare cavity 1 resonance frequency
+        self.Q1_b = self.R1 * np.sqrt(self.C1 / self.L1)  # bare cavity 1 quality factor
+        self.w02_b = np.sqrt(1. / (self.C2 * self.L2))  # rad/s, bare cavity 2 resonance frequency
+        self.f02_b = self.w02_b / 2. / np.pi  # Hz, bare cavity 2 resonance frequency
+        self.Q2_b = self.R2 * np.sqrt(self.C2 / self.L2)  # bare cavity 2 quality factor
+
+        self.w01_d = np.sqrt(1. / (self.Csum1 * self.L1))  # rad/s, dressed cavity 1 resonance frequency
+        self.f01_d = self.w01_d / 2. / np.pi  # Hz, dressed cavity 1 resonance frequency
+        self.Q1_d = self.R1 * np.sqrt(self.Csum1 / self.L1)  # dressed cavity 1 quality factor
+        self.w02_d = np.sqrt(1. / (self.Csum2 * self.L2))  # rad/s, dressed cavity 2 resonance frequency
+        self.f02_d = self.w02_d / 2. / np.pi  # Hz, dressed cavity 2 resonance frequency
+        self.Q2_d = self.R2 * np.sqrt(self.Csum2 / self.L2)  # dressed cavity 2 quality factor
 
         self.Nbeats = 1  # nr of windows (periods, beats) to simulate
 
@@ -82,12 +91,18 @@ class SimulationParameters(object):
         self.T = 1. / self.df
         self.ws = 2. * np.pi * self.fs
 
+        self.drive_id = ID_NOT_SET
+
         self.nr_drives = 0
         self.w_arr = None
         self.A_arr = None
         self.P_arr = None
 
         self.drive_V_arr = None
+
+        self.sys_id = ID_LINEAR
+        self.duff = 0.
+        self.phi0 = 1.
 
         self.add_thermal_noise = False
         self.noise_T1 = 0.  # K
@@ -111,23 +126,38 @@ class SimulationParameters(object):
         self.para.L2 = float(self.L2)
         self.para.C2 = float(self.C2)
 
-        self.para.drive_id = ID_NOT_SET
+        self.para.drive_id = int(self.drive_id)
 
-        self.para.nr_drives = 0
+        self.para.nr_drives = int(self.nr_drives)
         self.para.w_arr = c_double_p()
         self.para.A_arr = c_double_p()
         self.para.P_arr = c_double_p()
 
         self.para.drive_V_arr = c_double_p()
 
-        self.para.sys_id = ID_LINEAR
+        self.para.sys_id = int(self.sys_id)
 
-        self.para.duff = 0.
-        self.para.phi0 = 1.
+        self.para.duff = float(self.duff)
+        self.para.phi0 = float(self.phi0)
 
         self.para.add_thermal_noise = self.add_thermal_noise
         self.para.noise1_array = c_double_p()
         self.para.noise2_array = c_double_p()
+
+    def pickable_copy(self):
+        """ Return a pickable copy of this object. Useful e.g. to save the
+        simulation parameters with numpy.savez or with pickle.dump
+
+        Returns:
+            (SimulationParameters)
+
+        Notes:
+            The returned object cannot be used to run simulations.
+            Bad things will happen, probably...
+        """
+        new = copy(self)
+        new.para = None
+        return new
 
     def get_time_arr(self, extra=False):
         """ Return the simulated time array.
@@ -231,7 +261,8 @@ class SimulationParameters(object):
     def set_drive_none(self):
         """ Set drive to zero. Useful e.g. for simulating only noise.
         """
-        self.para.drive_id = ID_NO_DRIVE
+        self.drive_id = ID_NO_DRIVE
+        self.para.drive_id = int(self.drive_id)
 
     def set_drive_lockin(self, f_arr, A_arr, P_arr):
         """ Set a lockin drive, calculated in real time during the simulation.
@@ -267,8 +298,9 @@ class SimulationParameters(object):
         self.w_arr = w_arr
         self.A_arr = A_arr
         self.P_arr = P_arr
+        self.drive_id = ID_LOCKIN
 
-        self.para.drive_id = ID_LOCKIN
+        self.para.drive_id = int(self.drive_id)
         self.para.nr_drives = self.nr_drives
         self.para.w_arr = npct.as_ctypes(self.w_arr)
         self.para.A_arr = npct.as_ctypes(self.A_arr)
@@ -302,8 +334,9 @@ class SimulationParameters(object):
             raise ValueError("Array must have same shape as get_drive_time_arr().")
 
         self.drive_V_arr = V
+        self.drive_id = ID_DRIVE_V
         self.para.drive_V_arr = npct.as_ctypes(self.drive_V_arr)
-        self.para.drive_id = ID_DRIVE_V
+        self.para.drive_id = int(self.drive_id)
 
     def set_drive_dVdt(self, dVdt):
         """ Set the time derivative of the drive voltage. It will be
@@ -334,8 +367,9 @@ class SimulationParameters(object):
             raise ValueError("Array must have same shape as get_drive_time_arr().")
 
         self.drive_V_arr = dVdt
+        self.drive_id = ID_DRIVE_dVdt
         self.para.drive_V_arr = npct.as_ctypes(self.drive_V_arr)
-        self.para.drive_id = ID_DRIVE_dVdt
+        self.para.drive_id = int(self.drive_id)
 
     def set_linear(self):
         """ Set the second oscillator (qubit) as linear.
@@ -345,7 +379,8 @@ class SimulationParameters(object):
             The current through the linear inductor is:
             I_L2 = Phi_2 / L2
         """
-        self.para.sys_id = ID_LINEAR
+        self.sys_id = ID_LINEAR
+        self.para.sys_id = int(self.sys_id)
 
     def set_duffing(self, duff):
         """ Set a Duffing nonlinearity on the second oscillator (qubit).
@@ -357,24 +392,35 @@ class SimulationParameters(object):
             The current through the nonlinear inductor is:
             I_L2 = Phi_2 / L2 * (1. - duff * Phi_2**2)
         """
-        self.para.duff = float(duff)
-        self.para.sys_id = ID_DUFFING
+        self.duff = float(duff)
+        self.para.duff = float(self.duff)
+        self.sys_id = ID_DUFFING
+        self.para.sys_id = int(self.sys_id)
 
-    def set_josephson(self, PHI0=2.067833831e-15):
+    def set_josephson(self, PHI0=2.067833831e-15, which='right'):
         """ Set a Josephson-junction nonlinearity on the second oscillator
         (qubit).
 
         Args:
             PHI0 (float, optional): magnetic flux quantum,
                 default to 2.067833831e-15 Wb
+            which (str, optional): set the nonlinearity in the 'right'
+                (second, qubit) or 'both' oscillators
 
         Notes:
             The current through the nonlinear inductor is:
             I_L2 = I_C * sin(2. * np.pi * Phi_2 / PHI0)
                  = PHI0 / (2. * np.pi * L_2) * sin(2. * np.pi * Phi_2 / PHI0)
         """
-        self.para.phi0 = float(PHI0)
-        self.para.sys_id = ID_JOSEPHSON
+        if which not in ['right', 'both']:
+            raise ValueError("only 'right' and 'both' are allowed.")
+        self.phi0 = float(PHI0)
+        self.para.phi0 = float(self.phi0)
+        if which == 'right':
+            self.sys_id = ID_JOSEPHSON
+        else:  # 'both'
+            self.sys_id = ID_JOSEPHSON_BOTH
+        self.para.sys_id = int(self.sys_id)
 
     def set_noise_T(self, T, T2=None, seed=None):
         """ Set strength of the thermal (process) noise on the two oscillators
@@ -462,12 +508,12 @@ class SimulationParameters(object):
         Returns:
             (np.ndarray): the solution array, with shape (Nbeats * ns, 4).
         """
-        if self.para.drive_id == ID_NOT_SET:
+        if self.drive_id == ID_NOT_SET:
             raise RuntimeError("No drive initialized! Use one of set_drive_none, set_drive_lockin, set_drive_V, set_drive_dVdt.")
         if self.add_thermal_noise:
             if len(self.noise1_array) != self.Nbeats * self.ns + 2:
                 raise RuntimeError("Wrong noise-array length! Regenerate or disable noise with set_noise_T.")
-        if self.para.drive_id == ID_DRIVE_V or self.para.drive_id == ID_DRIVE_dVdt:
+        if self.drive_id == ID_DRIVE_V or self.drive_id == ID_DRIVE_dVdt:
             if len(self.drive_V_arr) != self.Nbeats * self.ns + 1:
                 raise RuntimeError("Wrong drive-array length! Reset drive with set_drive_V or set_drive_dVdt.")
         if init is None:
@@ -502,12 +548,12 @@ class SimulationParameters(object):
             self.para.C1 /= T0
             self.para.L2 /= T0
             self.para.C2 /= T0
-            if self.para.drive_id == ID_LOCKIN:
+            if self.drive_id == ID_LOCKIN:
                 self.w_arr /= F0
                 self.A_arr /= PHI0 * F0
-            elif self.para.drive_id == ID_DRIVE_V:
+            elif self.drive_id == ID_DRIVE_V:
                 self.drive_V_arr /= PHI0 * F0
-            elif self.para.drive_id == ID_DRIVE_dVdt:
+            elif self.drive_id == ID_DRIVE_dVdt:
                 self.drive_V_arr /= PHI0 * F0**2
             self.para.duff *= PHI0**2
             self.para.phi0 /= PHI0
@@ -548,12 +594,12 @@ class SimulationParameters(object):
             self.para.C1 *= T0
             self.para.L2 *= T0
             self.para.C2 *= T0
-            if self.para.drive_id == ID_LOCKIN:
+            if self.drive_id == ID_LOCKIN:
                 self.w_arr *= F0
                 self.A_arr *= PHI0 * F0
-            elif self.para.drive_id == ID_DRIVE_V:
+            elif self.drive_id == ID_DRIVE_V:
                 self.drive_V_arr *= PHI0 * F0
-            elif self.para.drive_id == ID_DRIVE_dVdt:
+            elif self.drive_id == ID_DRIVE_dVdt:
                 self.drive_V_arr *= PHI0 * F0**2
             self.para.duff /= PHI0**2
             self.para.phi0 *= PHI0
@@ -756,7 +802,7 @@ class _SimPara(ctypes.Structure):
         ('drive_acc', ctypes.c_void_p),  # internal
 
         # Select system
-        ('sys_id', ctypes.c_int),  # ID_LINEAR, ID_DUFFING or ID_JOSEPHSON
+        ('sys_id', ctypes.c_int),  # ID_LINEAR, ID_DUFFING, ID_JOSEPHSON or ID_JOSEPHSON_BOTH
 
         # Duffing: V/L * (1. - duff * V*V)
         ('duff', c_double),  # V^-2
