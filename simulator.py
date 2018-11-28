@@ -82,7 +82,7 @@ class SimulationParameters(object):
 
         self.Nbeats = 1  # nr of windows (periods, beats) to simulate
 
-        self.fs = 50e9  # Hz
+        self.fs = 100e9  # Hz
         self.df = 50e6  # Hz
         self.dw = 2. * np.pi * self.df
         self.df = self.dw / (2. * np.pi)
