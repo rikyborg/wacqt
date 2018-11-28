@@ -14,7 +14,8 @@ rcParams['legend.fontsize'] = 'large'
 rcParams['xtick.labelsize'] = 'large'
 rcParams['ytick.labelsize'] = 'large'
 
-filename = "double_AMP_2.0e-01_V.npz"
+# filename = "double_AMP_0.0e+00_V_df_1.6e+06_Hz_Navg_10000.npz"
+filename = "double_AMP_5.0e-01_V_df_1.6e+06_Hz_Navg_10000.npz"
 
 with np.load(filename) as npzfile:
     para = np.asscalar(npzfile['para'])
@@ -24,6 +25,8 @@ with np.load(filename) as npzfile:
     psd2 = npzfile['psd2']
     resp_low = npzfile['resp_low']
     resp_high = npzfile['resp_high']
+    karray = npzfile['karray'],
+    resp_zoom = npzfile['resp_zoom'],
 
     AMP = np.asscalar(npzfile['AMP'])
     fH_ = np.asscalar(npzfile['fH_'])

@@ -18,7 +18,7 @@ rcParams['legend.fontsize'] = 'large'
 rcParams['xtick.labelsize'] = 'large'
 rcParams['ytick.labelsize'] = 'large'
 
-Navg = 100
+Navg = 10000
 # /. cR -> 1*^-4 /. cS -> 1*^-3 /. l -> 10. /. r -> 1*^5
 _Cl = 1e-18  # F
 _Cr = 1e-13  # F
@@ -30,7 +30,10 @@ para = sim.SimulationParameters(
     R1=_R, L1=_L, C1=_Cs - _Cl - _Cr,
     R2=_R, L2=_L, C2=_Cs - _Cr,
 )
+
+# AMP = 0.
 AMP = 0.5
+
 # para.set_josephson(which='right')
 # para.set_josephson(which='both')
 # para.set_josephson(PHI0=2.067833831e-15 * np.sqrt(10.), which='right')
@@ -46,8 +49,8 @@ width = _Cs / (_R * (_Cs**2 - _Cr**2)) / (2. * np.pi)  # average
 noise_T = Planck * center / Boltzmann / 2
 
 fP_ = center
-# df_ = np.sqrt(split * width)
-df_ = width
+df_ = np.sqrt(split * width)
+# df_ = width
 fP, df = para.tune(fP_, df_, priority='f', regular=True)
 fL = int(round(fL_ / df)) * df
 fH = int(round(fH_ / df)) * df
@@ -70,6 +73,8 @@ psd1 = np.zeros_like(freqs)
 psd2 = np.zeros_like(freqs)
 resp_low = np.zeros(Navg, dtype=np.complex128)
 resp_high = np.zeros(Navg, dtype=np.complex128)
+karray = np.arange(int(kP - 1.5 * (kH - kL)), int(kP + 1.5 * (kH - kL)))
+resp_zoom = np.zeros((len(karray), Navg), dtype=np.complex128)
 
 t0 = time.time()
 for ii in range(Navg):
@@ -88,6 +93,7 @@ for ii in range(Navg):
     psd2 += 2. * (V2_fft.real**2 + V2_fft.imag**2) / df
     resp_low[ii] = V1_fft[kL]
     resp_high[ii] = V1_fft[kH]
+    resp_zoom[:, ii] = V1_fft[karray]
 t1 = time.time()
 print("Simulation time: {}".format(sim.format_sec(t1 - t0)))
 
@@ -160,7 +166,7 @@ fig3.suptitle(r"$A_\mathrm{P}$ = " + "{:.1e} V".format(AMP))
 fig3.show()
 
 
-filename = "double_AMP_{:.1e}_V".format(AMP)
+filename = "double_AMP_{:.1e}_V_df_{:.1e}_Hz_Navg_{:d}".format(AMP, df, Navg)
 np.savez(
     filename,
     para=para.pickable_copy(),
@@ -170,6 +176,8 @@ np.savez(
     psd2=psd2,
     resp_low=resp_low,
     resp_high=resp_high,
+    karray=karray,
+    resp_zoom=resp_zoom,
 
     AMP=AMP,
     fH_=fH_,
