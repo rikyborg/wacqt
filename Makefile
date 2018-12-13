@@ -19,16 +19,15 @@ ifeq "$(UNAME)" "Darwin"
     CC = clang
     CFLAGS = -Wall -fPIC -I"/usr/local/include"
     LDFLAGS = -bundle
-    # LIBS = /usr/local/lib/libsundials_cvode.a /usr/local/lib/libsundials_nvecserial.a
     LIBS = -lsundials_cvode -lsundials_nvecserial -lgsl
     PYEXT = bundle
     RM = rm
 endif
 
-sim_cvode2.so: sim_cvode.o
+sim_cvode.so: sim_cvode.o
 	$(CC) $(LDFLAGS) -o sim_cvode.$(PYEXT) sim_cvode.o $(LIBS)
 
-sim_cvode2.o: sim_cvode2.c
+sim_cvode.o: sim_cvode.c
 	$(CC) $(CFLAGS) -c sim_cvode.c
 
 clean:
