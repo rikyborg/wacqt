@@ -9,7 +9,7 @@ $(info System is $(UNAME))
 
 ifeq "$(UNAME)" "Linux"
     CC = gcc
-    CFLAGS = -Wall -fPIC
+    CFLAGS = -Wall -fPIC -O3
     LDFLAGS = -Wall -shared
     LIBS = -lsundials_cvode -lsundials_nvecserial -lgsl -lm
     PYEXT = so
@@ -25,12 +25,10 @@ ifeq "$(UNAME)" "Darwin"
     RM = rm
 endif
 
-sim_cvode.so: sim_cvode.o
-	# gcc -Wall -shared -o sim_cvode.so sim_cvode.o -lsundials_cvode -lsundials_nvecserial -lgsl -lm
+sim_cvode2.so: sim_cvode.o
 	$(CC) $(LDFLAGS) -o sim_cvode.$(PYEXT) sim_cvode.o $(LIBS)
 
-sim_cvode.o: sim_cvode.c
-	# gcc -Wall -fPIC -c sim_cvode.c
+sim_cvode2.o: sim_cvode2.c
 	$(CC) $(CFLAGS) -c sim_cvode.c
 
 clean:

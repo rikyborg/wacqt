@@ -15,13 +15,16 @@ rcParams['xtick.labelsize'] = 'large'
 rcParams['ytick.labelsize'] = 'large'
 
 para = sim.SimulationParameters(
-    Cl=1e-15, Cr=1e-12,
-    R1=3162., L1=1e-9, C1=1e-12,
-    R2=3162., L2=2e-9, C2=2e-12,
+    Cl=1e-16, Cr=6.19e-15,
+    R1=2.50e8, L1=9.94e-10, C1=3.98e-13,
+    # R2=6.24e8, L2=7.75e-9, C2=6.44e-14,  # ground, 01
+    R2=6.24e8, L2=8.22e-9, C2=6.44e-14,  # excited, 12
 )
 
-df_ = 50e6  # Hz
-fc_ = 4.04e9  # Hz
+fc_ground = 7959147851.478515  # Hz
+fc_excited = 7956492274.9227495  # Hz
+df_ = fc_ground - fc_excited
+fc_ = 0.5 * (fc_ground + fc_excited)
 f1_ = fc_ - df_ / 2.
 f1, df = para.tune(f1_, df_, priority='f', regular=True)
 f_arr = np.array([f1, f1 + df])
@@ -40,19 +43,18 @@ drive[:para.ns] = 0.
 drive[-2 * para.ns:] = 0.
 para.set_drive_V(drive)
 
-para.set_noise_T(300.)
+para.set_noise_T(.03)
 sol = para.simulate()
 
-fig, ax = plt.subplots(4, 1, sharex=True, tight_layout=True)
-ax1, ax2, ax3, ax4 = ax
+fig, ax = plt.subplots(3, 1, sharex=True, tight_layout=True)
+ax1, ax2, ax3 = ax
 for ax_ in ax:
     for nn in range(para.Nbeats + 1):
         TT = nn / para.df
         ax_.axvline(1e9 * TT, ls='--', c='tab:gray')
 ax1.plot(1e9 * t_drive, drive, c='tab:blue', label='drive [V]')
-ax2.plot(1e9 * t, 1e3 * sol[:, 2], c='tab:orange', label='Cavity V1 [mV]')
-ax3.plot(1e9 * t, 1e3 * sol[:, 4], c='tab:green', label='Qubit V2 [mV]')
-ax4.plot(1e9 * t, sol[:, 0], c='tab:red', label='V0 [V]')
+ax2.plot(1e9 * t, 1e3 * sol[:, 1], c='tab:orange', label='Cavity V1 [mV]')
+ax3.plot(1e9 * t, 1e3 * sol[:, 3], c='tab:green', label='Qubit V2 [mV]')
 for ax_ in ax:
     ax_.legend()
 ax3.set_xlabel("Time [ns]")

@@ -18,9 +18,11 @@ para = sim.SimulationParameters(
     Cl=1e-15, Cr=1e-12,
     R1=3162., L1=1e-9, C1=1e-12,
     R2=3162., L2=2e-9, C2=2e-12,
+    fs=1000e9,
 )
-# para.set_duffing(1e23)
-para.set_josephson()
+# para.set_duffing(1e29)
+# para.set_josephson()
+# para.set_josephson(which='both')
 
 df_ = 50e6  # Hz
 fc_ = 4.04e9  # Hz
@@ -37,7 +39,7 @@ para.set_Nbeats(Nr + Na)
 para.set_df(df)
 para.set_drive_lockin(f_arr, A_arr, P_arr)
 
-# para.set_noise_T(300.)
+# para.set_noise_T(3e-6)
 
 para.para.stiff_equation = False
 sol = para.simulate(print_time=True)

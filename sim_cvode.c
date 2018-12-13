@@ -17,7 +17,7 @@
 /* Program constants */
 #define true  1
 #define false 0
-#define NEQ   4              // number of equations
+#define NEQ   5              // number of equations
 
 /*  // Use instead para->stiff_equation
 #define LMM   CV_ADAMS       // nonstiff
@@ -34,7 +34,6 @@
 #define ID_NO_DRIVE 0
 #define ID_LOCKIN 1
 #define ID_DRIVE_V 2
-#define ID_DRIVE_dVdt 3
 
 // #define PHI0 2.067833831e-15  // Wb, magnetic flux quantum
 // #define PHI0 2.067833831e-12  // FAKE
@@ -59,9 +58,10 @@ typedef struct SimPara {
     realtype R2;  // ohm
     realtype L2;  // H
     realtype C2;  // F
+    realtype R0;  // ohm
 
     /* Drive */
-    int drive_id;  // ID_LOCKIN, ID_DRIVE_V or ID_DRIVE_dVdt
+    int drive_id;  // ID_LOCKIN, ID_DRIVE_V
     // Lockin
     int nr_drives;
     realtype* w_arr;  // rad/s
@@ -76,7 +76,8 @@ typedef struct SimPara {
     int sys_id;  // ID_LINEAR, ID_DUFFING, ID_JOSEPHSON or ID_JOSEPHSON_BOTH
 
     /* Duffing: V/L * (1. - duff * V*V) */
-    realtype duff;  // V^-2
+    realtype duff1;  // V^-2
+    realtype duff2;  // V^-2
 
     /* Josephson */
     realtype phi0;
@@ -84,15 +85,73 @@ typedef struct SimPara {
     /* Thermal noise */
     int add_thermal_noise;  // bool
     realtype* noise1_arr;  // V
-    realtype* noise2_arr;  // V
     gsl_spline* noise1_spline;  // internal
     gsl_interp_accel* noise1_acc;  // internal
+    realtype* noise2_arr;  // V
     gsl_spline* noise2_spline;  // internal
     gsl_interp_accel* noise2_acc;  // internal
+    realtype* noise0_arr;  // V
+    gsl_spline* noise0_spline;  // internal
+    gsl_interp_accel* noise0_acc;  // internal
+
+    /* Other internal */
+    realtype b[NEQ];
+    realtype a[NEQ][NEQ];
 } SimPara;
 
+
+static int init_para(SimPara* para) {
+    realtype cL = para->Cl;
+    realtype cR = para->Cr;
+    realtype r1 = para->R1;
+    realtype l1 = para->L1;
+    realtype c1 = para->C1;
+    realtype r2 = para->R2;
+    realtype l2 = para->L2;
+    realtype c2 = para->C2;
+    realtype r0 = para->R0;
+
+    para->b[0] = (c2 * (c1 + cL) + (c1 + c2 + cL) * cR) / (cL * (c2 * cR + c1 * (c2 + cR)) * r0);
+    para->b[1] = 0.;
+    para->b[2] = (c2 + cR) / (c1 * c2 * r0 + c1 * cR * r0 + c2 * cR * r0);
+    para->b[3] = 0.;
+    para->b[4] = cR / (c1 * c2 * r0 + c1 * cR * r0 + c2 * cR * r0);
+
+    para->a[0][0] = -((c2 * (c1 + cL) + (c1 + c2 + cL) * cR) / (cL * (c2 * cR + c1 * (c2 + cR)))) / r0;
+    para->a[0][1] = -((c2 + cR) / (c1 * c2 + c1 * cR + c2 * cR)) / l1;
+    para->a[0][2] = -((c2 + cR) / (c1 * c2 + c1 * cR + c2 * cR)) / r1;
+    para->a[0][3] = -(cR / (c1 * c2 + c1 * cR + c2 * cR)) / l2;
+    para->a[0][4] = -(cR / (c1 * c2 + c1 * cR + c2 * cR)) / r2;
+
+    para->a[1][0] = 0.;
+    para->a[1][1] = 0.;
+    para->a[1][2] = 1.;
+    para->a[1][3] = 0.;
+    para->a[1][4] = 0.;
+
+    para->a[2][0] = -((c2 + cR) / (c1 * c2 + c1 * cR + c2 * cR)) / r0;
+    para->a[2][1] = -((c2 + cR) / (c1 * c2 + c1 * cR + c2 * cR)) / l1;
+    para->a[2][2] = -((c2 + cR) / (c1 * c2 + c1 * cR + c2 * cR)) / r1;
+    para->a[2][3] = -(cR / (c1 * c2 + c1 * cR + c2 * cR)) / l2;
+    para->a[2][4] = -(cR / (c1 * c2 + c1 * cR + c2 * cR)) / r2;
+
+    para->a[3][0] = 0.;
+    para->a[3][1] = 0.;
+    para->a[3][2] = 0.;
+    para->a[3][3] = 0.;
+    para->a[3][4] = 1.;
+
+    para->a[4][0] = -(cR / (c1 * c2 + c1 * cR + c2 * cR)) / r0;
+    para->a[4][1] = -(cR / (c1 * c2 + c1 * cR + c2 * cR)) / l1;
+    para->a[4][2] = -(cR / (c1 * c2 + c1 * cR + c2 * cR)) / r1;
+    para->a[4][3] = -((c1 + cR) / (c1 * c2 + c1 * cR + c2 * cR)) / l2;
+    para->a[4][4] = -((c1 + cR) / (c1 * c2 + c1 * cR + c2 * cR)) / r2;
+
+    return(0);
+}
+
 /* Functions Called by the Solver */
-static realtype V_dot_drive(realtype t, void* user_data);
+static realtype V_drive(realtype t, void* user_data);
 static realtype V_noise(realtype t, int node, void* user_data);
 static int      ode_linear(realtype t, N_Vector y, N_Vector ydot, void* user_data);
 static int      ode_duffing(realtype t, N_Vector y, N_Vector ydot, void* user_data);
@@ -107,7 +166,7 @@ static int      jac_duffing(long int N, realtype t,
 /* Private function to check function return values */
 static int check_flag(void *flagvalue, char *funcname, int opt);
 
-static realtype V_dot_drive(realtype t, void* user_data) {
+static realtype V_drive(realtype t, void* user_data) {
     SimPara* para = (SimPara*) user_data;
     int drive_id = para->drive_id;
     if (drive_id==ID_NO_DRIVE) {
@@ -120,24 +179,23 @@ static realtype V_dot_drive(realtype t, void* user_data) {
 
         realtype ret = 0.;
         for (int i=0; i<nr_drives; i++) {
-            ret += -w_arr[i] * A_arr[i] * sin(w_arr[i]*t + P_arr[i]);
+            ret += A_arr[i] * cos(w_arr[i]*t + P_arr[i]);
         }
 
         return ret;
-    } else if (drive_id==ID_DRIVE_V) {
-        return gsl_spline_eval_deriv(para->drive_spline, t, para->drive_acc);
-    } else { // drive_id==ID_DRIVE_dVdt
-        // printf("%f - %f - %f\n", t * 1e9, para->drive_spline->interp->xmin * 1e9, para->drive_spline->interp->xmax * 1e9);
+    } else { // drive_id==ID_DRIVE_V
         return gsl_spline_eval(para->drive_spline, t, para->drive_acc);
     }
 }
 
 static realtype V_noise(realtype t, int node, void* user_data) {
     SimPara* para = (SimPara*) user_data;
-    if (node == 1){
+    if (node == 1) {
         return gsl_spline_eval(para->noise1_spline, t, para->noise1_acc);
-    } else {
+    } else if (node == 2) {
         return gsl_spline_eval(para->noise2_spline, t, para->noise2_acc);
+    } else {  // 0
+        return gsl_spline_eval(para->noise0_spline, t, para->noise0_acc);
     }
 }
 
@@ -145,40 +203,27 @@ static realtype V_noise(realtype t, int node, void* user_data) {
 static int ode_linear(realtype t, N_Vector y, N_Vector ydot, void* user_data) {
     SimPara* para = (SimPara*) user_data;
 
-    realtype P1 = NV_Ith_S(y, 0);
-    realtype V1 = NV_Ith_S(y, 1);
-    realtype P2 = NV_Ith_S(y, 2);
-    realtype V2 = NV_Ith_S(y, 3);
+    realtype Vg = V_drive(t, para);
 
-    realtype V0_dot = V_dot_drive(t, para);
-    realtype Vn1, Vn2;
-    if (para->add_thermal_noise == true) {
-        Vn1 = V_noise(t, 1, para);
-        Vn2 = V_noise(t, 2, para);
-    } else {
-        Vn1 = 0.;
-        Vn2 = 0.;
+    for (int ii=0; ii<NEQ; ii++) {
+        NV_Ith_S(ydot, ii) = 0.;
+        for (int jj=0; jj<NEQ; jj++) {
+            NV_Ith_S(ydot, ii) += para->a[ii][jj] * NV_Ith_S(y, jj);
+        }
+        NV_Ith_S(ydot, ii) += para->b[ii] * Vg;
     }
 
-    realtype Cl = para->Cl;
-    realtype Cr = para->Cr;
-    realtype R1 = para->R1;
-    realtype L1 = para->L1;
-    realtype C1 = para->C1;
-    realtype R2 = para->R2;
-    realtype L2 = para->L2;
-    realtype C2 = para->C2;
-
-    realtype Csum1 = C1 + Cl + Cr;
-    realtype Csum2 = C2 + Cr;
-    realtype g0 = 1. / (1. - Cr*Cr / (Csum1 * Csum2));
-    realtype g1 = Cr / Csum1;
-    realtype g2 = Cr / Csum2;
-
-    NV_Ith_S(ydot, 0) = V1;
-    NV_Ith_S(ydot, 1) = g0 * (-P1 / (Csum1 * L1) - (V1+Vn1) / (Csum1 * R1) + Cl / Csum1 * V0_dot + g1 * (-P2 / (Csum2 * L2) - (V2+Vn2) / (Csum2 * R2)));
-    NV_Ith_S(ydot, 2) = V2;
-    NV_Ith_S(ydot, 3) = g0 * (-P2 / (Csum2 * L2) - (V2+Vn2) / (Csum2 * R2) + g2 * (-P1 / (Csum1 * L1) - (V1+Vn1) / (Csum1 * R1) + Cl / Csum1 * V0_dot));
+    /* Add noise */
+    if (para->add_thermal_noise == true) {
+        realtype Vn1 = V_noise(t, 1, para);
+        realtype Vn2 = V_noise(t, 2, para);
+        realtype Vn0 = V_noise(t, 0, para);
+        for (int ii=0; ii<NEQ; ii++) {
+            NV_Ith_S(ydot, ii) += para->a[ii][2] * Vn1;
+            NV_Ith_S(ydot, ii) += para->a[ii][4] * Vn2;
+            NV_Ith_S(ydot, ii) += para->a[ii][0] * Vn0;
+        }
+    }
 
     return(0);
 }
@@ -189,40 +234,11 @@ static int jac_linear(long int N, realtype t,
                N_Vector tmp1, N_Vector tmp2, N_Vector tmp3) {
     SimPara* para = (SimPara*) user_data;
 
-    realtype Cl = para->Cl;
-    realtype Cr = para->Cr;
-    realtype R1 = para->R1;
-    realtype L1 = para->L1;
-    realtype C1 = para->C1;
-    realtype R2 = para->R2;
-    realtype L2 = para->L2;
-    realtype C2 = para->C2;
-
-    realtype Csum1 = C1 + Cl + Cr;
-    realtype Csum2 = C2 + Cr;
-    realtype g0 = 1. / (1. - Cr*Cr / (Csum1 * Csum2));
-    realtype g1 = Cr / Csum1;
-    realtype g2 = Cr / Csum2;
-
-    DENSE_ELEM(J, 0, 0) = RCONST(0.);
-    DENSE_ELEM(J, 0, 1) = RCONST(1.);
-    DENSE_ELEM(J, 0, 2) = RCONST(0.);
-    DENSE_ELEM(J, 0, 3) = RCONST(0.);
-
-    DENSE_ELEM(J, 1, 0) = -g0 / (Csum1 * L1);
-    DENSE_ELEM(J, 1, 1) = -g0 / (Csum1 * R1);
-    DENSE_ELEM(J, 1, 2) = -g0 * g1 / (Csum2 * L2);
-    DENSE_ELEM(J, 1, 3) = -g0 * g1 / (Csum2 * R2);
-
-    DENSE_ELEM(J, 2, 0) = RCONST(0.);
-    DENSE_ELEM(J, 2, 1) = RCONST(0.);
-    DENSE_ELEM(J, 2, 2) = RCONST(0.);
-    DENSE_ELEM(J, 2, 3) = RCONST(1.);
-
-    DENSE_ELEM(J, 3, 0) = -g0 * g2 / (Csum1 * L1);
-    DENSE_ELEM(J, 3, 1) = -g0 * g2 / (Csum1 * R1);
-    DENSE_ELEM(J, 3, 2) = -g0 / (Csum2 * L2);
-    DENSE_ELEM(J, 3, 3) = -g0 / (Csum2 * R2);
+    for (int ii=0; ii<NEQ; ii++) {
+        for (int jj=0; jj<NEQ; jj++) {
+            DENSE_ELEM(J, ii, jj) = para->a[ii][jj];
+        }
+    }
 
     return(0);
 }
@@ -230,41 +246,16 @@ static int jac_linear(long int N, realtype t,
 static int ode_duffing(realtype t, N_Vector y, N_Vector ydot, void* user_data) {
     SimPara* para = (SimPara*) user_data;
 
-    realtype P1 = NV_Ith_S(y, 0);
-    realtype V1 = NV_Ith_S(y, 1);
-    realtype P2 = NV_Ith_S(y, 2);
-    realtype V2 = NV_Ith_S(y, 3);
+    /* First do the linear part */
+    ode_linear(t, y, ydot, user_data);
 
-    realtype V0_dot = V_dot_drive(t, para);
-    realtype Vn1, Vn2;
-    if (para->add_thermal_noise == true) {
-        Vn1 = V_noise(t, 1, para);
-        Vn2 = V_noise(t, 2, para);
-    } else {
-        Vn1 = 0.;
-        Vn2 = 0.;
+    /* Then add the Duffing terms */
+    realtype P1 = NV_Ith_S(y, 1);
+    realtype P2 = NV_Ith_S(y, 3);
+    for (int ii=0; ii<NEQ; ii++) {
+        NV_Ith_S(ydot, ii) += -para->duff1 * para->a[ii][1] * P1*P1;
+        NV_Ith_S(ydot, ii) += -para->duff2 * para->a[ii][3] * P2*P2;
     }
-
-    realtype Cl = para->Cl;
-    realtype Cr = para->Cr;
-    realtype R1 = para->R1;
-    realtype L1 = para->L1;
-    realtype C1 = para->C1;
-    realtype R2 = para->R2;
-    realtype L2 = para->L2;
-    realtype C2 = para->C2;
-    realtype duff = para->duff;
-
-    realtype Csum1 = C1 + Cl + Cr;
-    realtype Csum2 = C2 + Cr;
-    realtype g0 = 1. / (1. - Cr*Cr / (Csum1 * Csum2));
-    realtype g1 = Cr / Csum1;
-    realtype g2 = Cr / Csum2;
-
-    NV_Ith_S(ydot, 0) = V1;
-    NV_Ith_S(ydot, 1) = g0 * (-P1 / (Csum1 * L1) - (V1+Vn1) / (Csum1 * R1) + Cl / Csum1 * V0_dot + g1 * (-P2/(Csum2*L2)*(1.-duff*P2*P2) - (V2+Vn2) / (Csum2 * R2)));
-    NV_Ith_S(ydot, 2) = V2;
-    NV_Ith_S(ydot, 3) = g0 * (-P2/(Csum2*L2)*(1.-duff*P2*P2) - (V2+Vn2) / (Csum2 * R2) + g2 * (-P1 / (Csum1 * L1) - (V1+Vn1) / (Csum1 * R1) + Cl / Csum1 * V0_dot));
 
     return(0);
 }
@@ -274,43 +265,16 @@ static int jac_duffing(long int N, realtype t,
                N_Vector tmp1, N_Vector tmp2, N_Vector tmp3) {
     SimPara* para = (SimPara*) user_data;
 
-    realtype P2 = NV_Ith_S(y, 2);
+    /* First do the linear part */
+    jac_linear(N, t, y, fy, J, user_data, tmp1, tmp2, tmp3);
 
-    realtype Cl = para->Cl;
-    realtype Cr = para->Cr;
-    realtype R1 = para->R1;
-    realtype L1 = para->L1;
-    realtype C1 = para->C1;
-    realtype R2 = para->R2;
-    realtype L2 = para->L2;
-    realtype C2 = para->C2;
-    realtype duff = para->duff;
-
-    realtype Csum1 = C1 + Cl + Cr;
-    realtype Csum2 = C2 + Cr;
-    realtype g0 = 1. / (1. - Cr*Cr / (Csum1 * Csum2));
-    realtype g1 = Cr / Csum1;
-    realtype g2 = Cr / Csum2;
-
-    DENSE_ELEM(J, 0, 0) = RCONST(0.);
-    DENSE_ELEM(J, 0, 1) = RCONST(1.);
-    DENSE_ELEM(J, 0, 2) = RCONST(0.);
-    DENSE_ELEM(J, 0, 3) = RCONST(0.);
-
-    DENSE_ELEM(J, 1, 0) = -g0 / (Csum1 * L1);
-    DENSE_ELEM(J, 1, 1) = -g0 / (Csum1 * R1);
-    DENSE_ELEM(J, 1, 2) = -g0 * g1 / (Csum2 * L2) * (1. - 2.*duff*P2);
-    DENSE_ELEM(J, 1, 3) = -g0 * g1 / (Csum2 * R2);
-
-    DENSE_ELEM(J, 2, 0) = RCONST(0.);
-    DENSE_ELEM(J, 2, 1) = RCONST(0.);
-    DENSE_ELEM(J, 2, 2) = RCONST(0.);
-    DENSE_ELEM(J, 2, 3) = RCONST(1.);
-
-    DENSE_ELEM(J, 3, 0) = -g0 * g2 / (Csum1 * L1);
-    DENSE_ELEM(J, 3, 1) = -g0 * g2 / (Csum1 * R1);
-    DENSE_ELEM(J, 3, 2) = -g0 / (Csum2 * L2) * (1. - 2.*duff*P2);
-    DENSE_ELEM(J, 3, 3) = -g0 / (Csum2 * R2);
+    /* Then add the Duffing terms */
+    realtype P1 = NV_Ith_S(y, 1);
+    realtype P2 = NV_Ith_S(y, 3);
+    for (int ii=0; ii<NEQ; ii++) {
+        DENSE_ELEM(J, ii, 1) += - 2. * para->duff1 * para->a[ii][1] * P1;
+        DENSE_ELEM(J, ii, 3) += - 2. * para->duff2 * para->a[ii][3] * P2;
+    }
 
     return(0);
 }
@@ -319,42 +283,16 @@ static int jac_duffing(long int N, realtype t,
 static int ode_josephson(realtype t, N_Vector y, N_Vector ydot, void* user_data) {
     SimPara* para = (SimPara*) user_data;
 
-    realtype P1 = NV_Ith_S(y, 0);
-    realtype V1 = NV_Ith_S(y, 1);
-    realtype P2 = NV_Ith_S(y, 2);
-    realtype V2 = NV_Ith_S(y, 3);
+    /* First do the linear part */
+    ode_linear(t, y, ydot, user_data);
 
-    realtype V0_dot = V_dot_drive(t, para);
-    realtype Vn1, Vn2;
-    if (para->add_thermal_noise == true) {
-        Vn1 = V_noise(t, 1, para);
-        Vn2 = V_noise(t, 2, para);
-    } else {
-        Vn1 = 0.;
-        Vn2 = 0.;
-    }
-
-    realtype Cl = para->Cl;
-    realtype Cr = para->Cr;
-    realtype R1 = para->R1;
-    realtype L1 = para->L1;
-    realtype C1 = para->C1;
-    realtype R2 = para->R2;
-    realtype L2 = para->L2;
-    realtype C2 = para->C2;
-
-    realtype Csum1 = C1 + Cl + Cr;
-    realtype Csum2 = C2 + Cr;
-    realtype g0 = 1. / (1. - Cr*Cr / (Csum1 * Csum2));
-    realtype g1 = Cr / Csum1;
-    realtype g2 = Cr / Csum2;
-
+    /* Then add the Josephson terms */
+    realtype P2 = NV_Ith_S(y, 3);
     realtype PHI0 = para->phi0;
-
-    NV_Ith_S(ydot, 0) = V1;
-    NV_Ith_S(ydot, 1) = g0 * (-P1 / (Csum1 * L1) - (V1+Vn1) / (Csum1 * R1) + Cl / Csum1 * V0_dot + g1 * (-sin(2.*M_PI*P2/PHI0)*PHI0/(2.*M_PI*Csum2*L2) - (V2+Vn2) / (Csum2 * R2)));
-    NV_Ith_S(ydot, 2) = V2;
-    NV_Ith_S(ydot, 3) = g0 * (-sin(2.*M_PI*P2/PHI0)*PHI0/(2.*M_PI*Csum2*L2) - (V2+Vn2) / (Csum2 * R2) + g2 * (-P1 / (Csum1 * L1) - (V1+Vn1) / (Csum1 * R1) + Cl / Csum1 * V0_dot));
+    for (int ii=0; ii<NEQ; ii++) {
+        NV_Ith_S(ydot, ii) -= para->a[ii][3] * P2;  // remove linear term
+        NV_Ith_S(ydot, ii) += para->a[ii][3] * PHI0/(2.*M_PI) * sin(2.*M_PI*P2/PHI0);  // add sine term
+    }
 
     return(0);
 }
@@ -365,44 +303,60 @@ static int jac_josephson(long int N, realtype t,
                N_Vector tmp1, N_Vector tmp2, N_Vector tmp3) {
     SimPara* para = (SimPara*) user_data;
 
-    realtype P2 = NV_Ith_S(y, 2);
+    /* First do the linear part */
+    jac_linear(N, t, y, fy, J, user_data, tmp1, tmp2, tmp3);
 
-    realtype Cl = para->Cl;
-    realtype Cr = para->Cr;
-    realtype R1 = para->R1;
-    realtype L1 = para->L1;
-    realtype C1 = para->C1;
-    realtype R2 = para->R2;
-    realtype L2 = para->L2;
-    realtype C2 = para->C2;
-
-    realtype Csum1 = C1 + Cl + Cr;
-    realtype Csum2 = C2 + Cr;
-    realtype g0 = 1. / (1. - Cr*Cr / (Csum1 * Csum2));
-    realtype g1 = Cr / Csum1;
-    realtype g2 = Cr / Csum2;
-
+    /* Then add the Josephson terms */
+    realtype P2 = NV_Ith_S(y, 3);
     realtype PHI0 = para->phi0;
+    for (int ii=0; ii<NEQ; ii++) {
+        DENSE_ELEM(J, ii, 3) -= para->a[ii][3];  // remove linear term
+        DENSE_ELEM(J, ii, 3) += para->a[ii][3] * cos(2.*M_PI*P2/PHI0);  // add cosine term
+    }
 
-    DENSE_ELEM(J, 0, 0) = RCONST(0.);
-    DENSE_ELEM(J, 0, 1) = RCONST(1.);
-    DENSE_ELEM(J, 0, 2) = RCONST(0.);
-    DENSE_ELEM(J, 0, 3) = RCONST(0.);
+    return(0);
+}
 
-    DENSE_ELEM(J, 1, 0) = -g0 / (Csum1 * L1);
-    DENSE_ELEM(J, 1, 1) = -g0 / (Csum1 * R1);
-    DENSE_ELEM(J, 1, 2) = -g0 * g1 / (Csum2 * L2) * cos(2.*M_PI*P2/PHI0);
-    DENSE_ELEM(J, 1, 3) = -g0 * g1 / (Csum2 * R2);
 
-    DENSE_ELEM(J, 2, 0) = RCONST(0.);
-    DENSE_ELEM(J, 2, 1) = RCONST(0.);
-    DENSE_ELEM(J, 2, 2) = RCONST(0.);
-    DENSE_ELEM(J, 2, 3) = RCONST(1.);
+static int ode_josephson_both(realtype t, N_Vector y, N_Vector ydot, void* user_data) {
+    SimPara* para = (SimPara*) user_data;
 
-    DENSE_ELEM(J, 3, 0) = -g0 * g2 / (Csum1 * L1);
-    DENSE_ELEM(J, 3, 1) = -g0 * g2 / (Csum1 * R1);
-    DENSE_ELEM(J, 3, 2) = -g0 / (Csum2 * L2) * cos(2.*M_PI*P2/PHI0);
-    DENSE_ELEM(J, 3, 3) = -g0 / (Csum2 * R2);
+    /* First do the linear part */
+    ode_linear(t, y, ydot, user_data);
+
+    /* Then add the Josephson terms */
+    realtype P1 = NV_Ith_S(y, 1);
+    realtype P2 = NV_Ith_S(y, 3);
+    realtype PHI0 = para->phi0;
+    for (int ii=0; ii<NEQ; ii++) {
+        NV_Ith_S(ydot, ii) -= para->a[ii][1] * P1;  // remove linear term
+        NV_Ith_S(ydot, ii) -= para->a[ii][3] * P2;  // remove linear term
+        NV_Ith_S(ydot, ii) += para->a[ii][1] * PHI0/(2.*M_PI) * sin(2.*M_PI*P1/PHI0);  // add sine term
+        NV_Ith_S(ydot, ii) += para->a[ii][3] * PHI0/(2.*M_PI) * sin(2.*M_PI*P2/PHI0);  // add sine term
+    }
+
+    return(0);
+}
+
+
+static int jac_josephson_both(long int N, realtype t,
+               N_Vector y, N_Vector fy, DlsMat J, void* user_data,
+               N_Vector tmp1, N_Vector tmp2, N_Vector tmp3) {
+    SimPara* para = (SimPara*) user_data;
+
+    /* First do the linear part */
+    jac_linear(N, t, y, fy, J, user_data, tmp1, tmp2, tmp3);
+
+    /* Then add the Josephson terms */
+    realtype P1 = NV_Ith_S(y, 1);
+    realtype P2 = NV_Ith_S(y, 3);
+    realtype PHI0 = para->phi0;
+    for (int ii=0; ii<NEQ; ii++) {
+        DENSE_ELEM(J, ii, 1) -= para->a[ii][1];  // remove linear term
+        DENSE_ELEM(J, ii, 3) -= para->a[ii][3];  // remove linear term
+        DENSE_ELEM(J, ii, 1) += para->a[ii][1] * cos(2.*M_PI*P1/PHI0);  // add cosine term
+        DENSE_ELEM(J, ii, 3) += para->a[ii][3] * cos(2.*M_PI*P2/PHI0);  // add cosine term
+    }
 
     return(0);
 }
@@ -509,6 +463,8 @@ int integrate_cvode(void* user_data,
     N_Vector y;
     void* cvode_mem;
     SimPara* para = (SimPara*) user_data;
+    /* Calculate internal parameters */
+    init_para(para);
 
     cvode_mem = NULL;
     
@@ -517,10 +473,9 @@ int integrate_cvode(void* user_data,
     if (check_flag((void *)y, "N_VNew_Serial", 0)) return(1);
 
     /* Initialize y */
-    NV_Ith_S(y, 0) = y0[0];
-    NV_Ith_S(y, 1) = y0[1];
-    NV_Ith_S(y, 2) = y0[2];
-    NV_Ith_S(y, 3) = y0[3];
+    for (int ii=0;ii<NEQ;ii++) {
+        NV_Ith_S(y, ii) = y0[ii];
+    }
 
     /* Call CVodeCreate to create the solver memory
      * with stepping and iteration method */
@@ -582,7 +537,7 @@ int integrate_cvode(void* user_data,
     if(check_flag(&flag, "CVodeSetUserData", 1)) return(1);
 
     realtype tstop=0.0;
-    if (para->drive_id==ID_DRIVE_V || para->drive_id==ID_DRIVE_dVdt) {
+    if (para->drive_id==ID_DRIVE_V) {
         para->drive_acc = gsl_interp_accel_alloc();
         para->drive_spline = gsl_spline_alloc(gsl_interp_cspline, nout);
         gsl_spline_init(para->drive_spline, tout_arr, para->drive_V_arr, nout);
@@ -599,6 +554,10 @@ int integrate_cvode(void* user_data,
         // para->noise2_spline = gsl_spline_alloc(gsl_interp_linear, nout);
         para->noise2_spline = gsl_spline_alloc(gsl_interp_cspline, nout);
         gsl_spline_init(para->noise2_spline, tout_arr, para->noise2_arr, nout);
+        para->noise0_acc = gsl_interp_accel_alloc();
+        // para->noise0_spline = gsl_spline_alloc(gsl_interp_linear, nout);
+        para->noise0_spline = gsl_spline_alloc(gsl_interp_cspline, nout);
+        gsl_spline_init(para->noise0_spline, tout_arr, para->noise0_arr, nout);
         if (tstop == 0.) {
             tstop = tout_arr[nout-1];
             flag = CVodeSetStopTime(cvode_mem, tstop);
@@ -608,15 +567,12 @@ int integrate_cvode(void* user_data,
 
     /* In loop, call CVode, write results, and test for error.
      Break out of loop when NOUT preset output times have been reached.  */
-    outdata[0] = NV_Ith_S(y,0);  // P1, flux on node 1
-    outdata[1] = NV_Ith_S(y,1); // V1, voltage on node 1
-    outdata[2] = NV_Ith_S(y,2); // P2, flux on node 2
-    outdata[3] = NV_Ith_S(y,3); // V2, voltage on node 2
-    int ii;
+    for (int ii=0; ii<NEQ; ii++) {
+        outdata[ii] = NV_Ith_S(y,ii);
+    }
     realtype tout, tret;
-    for(ii = 1; ii < nout; ii++){
-        tout = tout_arr[ii];
-
+    for(int tt=1; tt<nout; tt++){
+        tout = tout_arr[tt];
         flag = CVode(cvode_mem, tout, y, &tret, CV_NORMAL);
 
         // Treat roots
@@ -635,13 +591,12 @@ int integrate_cvode(void* user_data,
             // Save result to output vectors
             // OBS: the 1st will be the given initial condition,
             // as in scipy.integrate.odeint
-            outdata[ii*NEQ] = NV_Ith_S(y,0);     // P1, flux on node 1
-            outdata[ii*NEQ + 1] = NV_Ith_S(y,1); // V1, voltage on node 1
-            outdata[ii*NEQ + 2] = NV_Ith_S(y,2); // P2, flux on node 2
-            outdata[ii*NEQ + 3] = NV_Ith_S(y,3); // V2, voltage on node 2
+            for (int ii=0; ii<NEQ; ii++) {
+                outdata[tt*NEQ + ii] = NV_Ith_S(y,ii);     // P1, flux on node 1
+            }
         } else if (flag == CV_TSTOP_RETURN) {
             printf("CVODE: Reached stopping point\n");
-            printf("CV_TSTOP_RETURN: ii %d, nout %d, tout %g, tret %g, tstop %g\n", ii, nout, tout, tret, tstop);
+            printf("CV_TSTOP_RETURN: tt %d, nout %d, tout %g, tret %g, tstop %g\n", tt, nout, tout, tret, tstop);
             break;
         } else{
             // This shouldn't happen!
@@ -652,7 +607,7 @@ int integrate_cvode(void* user_data,
             break;
         }
     }
-    // printf("DONE: ii %d, nout %d, tout %f, tret %f, tstop %f, dt %f\n", ii, nout, tout*1e9, tret*1e9, tstop*1e9, dt*1e9);
+    // printf("DONE: tt %d, nout %d, tout %f, tret %f, tstop %f, dt %f\n", tt, nout, tout*1e9, tret*1e9, tstop*1e9, dt*1e9);
 
     /* Free y vector */
     N_VDestroy_Serial(y);
@@ -660,7 +615,7 @@ int integrate_cvode(void* user_data,
     /* Free integrator memory */
     CVodeFree(&cvode_mem);
 
-    if (para->drive_id==ID_DRIVE_V || para->drive_id==ID_DRIVE_dVdt) {
+    if (para->drive_id==ID_DRIVE_V) {
         gsl_spline_free(para->drive_spline);
         gsl_interp_accel_free(para->drive_acc);
     }
@@ -669,6 +624,8 @@ int integrate_cvode(void* user_data,
         gsl_interp_accel_free(para->noise1_acc);
         gsl_spline_free(para->noise2_spline);
         gsl_interp_accel_free(para->noise2_acc);
+        gsl_spline_free(para->noise0_spline);
+        gsl_interp_accel_free(para->noise0_acc);
     }
 
     return(0);
