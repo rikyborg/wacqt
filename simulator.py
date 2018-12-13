@@ -12,6 +12,8 @@ from scipy.constants import Boltzmann
 
 ID_NOT_SET = -1
 
+NEQ = 5
+
 ID_LINEAR = 0
 ID_DUFFING = 1
 ID_JOSEPHSON = 2
@@ -20,10 +22,10 @@ ID_JOSEPHSON_BOTH = 3
 ID_NO_DRIVE = 0
 ID_LOCKIN = 1
 ID_DRIVE_V = 2
-ID_DRIVE_dVdt = 3
 
 c_double = ctypes.c_double
 c_double_p = ctypes.POINTER(ctypes.c_double)
+c_double_pp = ctypes.POINTER(c_double_p)
 
 PHI0 = 2.067833831e-15  # Wb, magnetic flux quantum
 T0 = 1e-9  # s, time scale
@@ -43,6 +45,7 @@ class SimulationParameters(object):
         Cl, Cr,
         R1, L1, C1,
         R2, L2, C2,
+        R0=50., fs=50e9,
     ):
         """
         Args:
@@ -54,6 +57,8 @@ class SimulationParameters(object):
             R2 (float): qubit resistance in ohm (Omega)
             L2 (float): qubit inductance in henry (H)
             C2 (float): qubit capacitance in farad (F)
+            R0 (float, optional): transmission line impedance in ohm (Omega)
+            fs (float, optional): sampling frequency in hertz (Hz)
         """
         self.Cl = Cl
         self.Cr = Cr
@@ -65,6 +70,7 @@ class SimulationParameters(object):
         self.R2 = R2
         self.Csum1 = self.C1 + self.Cl + self.Cr
         self.Csum2 = self.C2 + self.Cr
+        self.R0 = R0
 
         self.w01_b = np.sqrt(1. / (self.C1 * self.L1))  # rad/s, bare cavity 1 resonance frequency
         self.f01_b = self.w01_b / 2. / np.pi  # Hz, bare cavity 1 resonance frequency
@@ -82,7 +88,7 @@ class SimulationParameters(object):
 
         self.Nbeats = 1  # nr of windows (periods, beats) to simulate
 
-        self.fs = 100e9  # Hz
+        self.fs = float(fs)  # Hz
         self.df = 50e6  # Hz
         self.dw = 2. * np.pi * self.df
         self.df = self.dw / (2. * np.pi)
@@ -101,21 +107,24 @@ class SimulationParameters(object):
         self.drive_V_arr = None
 
         self.sys_id = ID_LINEAR
-        self.duff = 0.
+        self.duff1 = 0.
+        self.duff2 = 0.
         self.phi0 = 1.
 
         self.add_thermal_noise = False
         self.noise_T1 = 0.  # K
         self.noise_T2 = 0.  # K
+        self.noise_T0 = 0.  # K
         self.noise1_array = None
         self.noise2_array = None
+        self.noise0_array = None
 
-        self.next_init = np.zeros(4)
+        self.next_init = np.zeros(NEQ)
 
         # Populate C structure
         self.para = _SimPara()
 
-        self.para.stiff_equation = False
+        self.para.stiff_equation = True
 
         self.para.Cl = float(self.Cl)
         self.para.Cr = float(self.Cr)
@@ -125,6 +134,7 @@ class SimulationParameters(object):
         self.para.R2 = float(self.R2)
         self.para.L2 = float(self.L2)
         self.para.C2 = float(self.C2)
+        self.para.R0 = float(self.R0)
 
         self.para.drive_id = int(self.drive_id)
 
@@ -137,12 +147,14 @@ class SimulationParameters(object):
 
         self.para.sys_id = int(self.sys_id)
 
-        self.para.duff = float(self.duff)
+        self.para.duff1 = float(self.duff1)
+        self.para.duff2 = float(self.duff2)
         self.para.phi0 = float(self.phi0)
 
         self.para.add_thermal_noise = self.add_thermal_noise
         self.para.noise1_array = c_double_p()
         self.para.noise2_array = c_double_p()
+        self.para.noise0_array = c_double_p()
 
     def pickable_copy(self):
         """ Return a pickable copy of this object. Useful e.g. to save the
@@ -282,7 +294,6 @@ class SimulationParameters(object):
         See also:
             tune
             set_drive_V
-            set_drive_dVdt
         """
         w_arr = 2. * np.pi * np.atleast_1d(f_arr).astype(np.float64)
         if len(w_arr.shape) > 1:
@@ -324,7 +335,6 @@ class SimulationParameters(object):
 
         See also:
             get_drive_time_arr
-            set_drive_dVdt
             set_drive_lockin
         """
         V = np.atleast_1d(V).astype(np.float64)
@@ -338,38 +348,25 @@ class SimulationParameters(object):
         self.para.drive_V_arr = npct.as_ctypes(self.drive_V_arr)
         self.para.drive_id = int(self.drive_id)
 
-    def set_drive_dVdt(self, dVdt):
-        """ Set the time derivative of the drive voltage. It will be
-        interpolated in real time with a cubic spline.
+    def get_drive_V(self):
+        """ Get the drive voltage used in the simulation.
 
-        Args:
-            dVdt (array_like): time derivative of drive signal in volts per
-                second (V/s), must be evaluated at times given by
-                get_drive_time_arr
+        Returns:
+            (np.ndarray): with shape (Nbeats * ns + 1, )
 
         Notes:
             One extra sample is needed to obtain the next initial condition.
             Use get_drive_time_arr to obtain the times at which the drive
             signal must be defined.
-
-        Raises:
-            ValueError: if the array has wrong shape
-
-        See also:
-            get_drive_time_arr
-            set_drive_V
-            set_drive_lockin
         """
-        dVdt = np.atleast_1d(dVdt).astype(np.float64)
-        if len(dVdt.shape) > 1:
-            raise ValueError("Array must be 1D.")
-        if len(dVdt) != self.Nbeats * self.ns + 1:
-            raise ValueError("Array must have same shape as get_drive_time_arr().")
-
-        self.drive_V_arr = dVdt
-        self.drive_id = ID_DRIVE_dVdt
-        self.para.drive_V_arr = npct.as_ctypes(self.drive_V_arr)
-        self.para.drive_id = int(self.drive_id)
+        if self.drive_id == ID_DRIVE_V:
+            return self.drive_V_arr
+        else:  # ID_LOCKIN
+            t = self.get_drive_time_arr()
+            Vg = np.zeros_like(t)
+            for ii in range(self.nr_drives):
+                Vg += self.A_arr[ii] * np.cos(self.w_arr[ii] * t + self.P_arr[ii])
+            return Vg
 
     def set_linear(self):
         """ Set the second oscillator (qubit) as linear.
@@ -382,18 +379,24 @@ class SimulationParameters(object):
         self.sys_id = ID_LINEAR
         self.para.sys_id = int(self.sys_id)
 
-    def set_duffing(self, duff):
-        """ Set a Duffing nonlinearity on the second oscillator (qubit).
+    def set_duffing(self, duff, duff2=None):
+        """ Set a Duffing nonlinearity on the inductors.
 
         Args:
-            duff (float): Duffing coefficient in Wb**(-2) = (V * s)**(-2)
+            duff (float): cavity Duffing coefficient in Wb**(-2)
+            duff2 (float, optional): qbit Duffing coefficient in Wb**(-2),
+                If None, use the same as the cavity
 
         Notes:
             The current through the nonlinear inductor is:
-            I_L2 = Phi_2 / L2 * (1. - duff * Phi_2**2)
+            I_L2 = Phi_2 / L2 * (1. - duff2 * Phi_2**2)
         """
-        self.duff = float(duff)
-        self.para.duff = float(self.duff)
+        self.duff1 = float(duff)
+        if duff2 is None:
+            duff2 = duff
+        self.duff2 = float(duff2)
+        self.para.duff1 = float(self.duff1)
+        self.para.duff2 = float(self.duff2)
         self.sys_id = ID_DUFFING
         self.para.sys_id = int(self.sys_id)
 
@@ -422,7 +425,7 @@ class SimulationParameters(object):
             self.sys_id = ID_JOSEPHSON_BOTH
         self.para.sys_id = int(self.sys_id)
 
-    def set_noise_T(self, T, T2=None, seed=None):
+    def set_noise_T(self, T, T2=None, T0=None, seed=None):
         """ Set strength of the thermal (process) noise on the two oscillators
         (cavity and qubit);
 
@@ -431,43 +434,55 @@ class SimulationParameters(object):
                 turn of the simulation of the noise (default).
             T2 (float, optional): qubit noise temperature in kelvin (K).
                 If None, use the same as the cavity
+            T0 (float, optional): drive noise temperature in kelvin (K).
+                If None, use the same as the cavity
             seed (int, optional): seed the random-number generator in NumPy
 
         Notes:
-            The noise is implemented as a current source in parallel with the
-            resistor in the oscillator (Norton equivalent).
-            The noise current I_N is a sample from a Gaussian distribution
-            with mean zero and standard variance
+            The noise is implemented as a voltage source in series with the
+            resistor in the oscillator (Thevenin equivalent).
+            The noise voltage V_N is a sample from a Gaussian distribution
+            with mean zero and variance
             sigma**2 / 2. * f_S
             where f_S is the sampling frequency in Hz and sigma**2 is the
-            one-sided power spectral density of the noise in A**2 / Hz
-            sigma**2 = 4. * k_B * T / R
+            one-sided power spectral density of the noise in V**2 / Hz
+            sigma**2 = 4. * k_B * T * R
             where k_B = 1.38064852e-23 J/K is the Boltzmann constant.
+            R is R1, R2 or R0 for cavity, qbit or drive, respectively.
         """
         if T2 is None:
             T2 = T
+        if T0 is None:
+            T0 = T
         self.noise_T1 = float(T)
         self.noise_T2 = float(T2)
+        self.noise_T0 = float(T0)
 
-        if self.noise_T1 or self.noise_T2:
+        if self.noise_T1 or self.noise_T2 or self.noise_T0:
             PSDv1_onesided = 4. * Boltzmann * self.noise_T1 * self.R1
             PSDv2_onesided = 4. * Boltzmann * self.noise_T2 * self.R2
+            PSDv0_onesided = 4. * Boltzmann * self.noise_T0 * self.R0
             PSDv1_twosided = PSDv1_onesided / 2.
             PSDv2_twosided = PSDv2_onesided / 2.
+            PSDv0_twosided = PSDv0_onesided / 2.
             self.add_thermal_noise = True
             self.para.add_thermal_noise = True
             np.random.seed(seed)
             self.noise1_array = np.sqrt(PSDv1_twosided) * np.sqrt(self.fs) * np.random.randn(self.Nbeats * self.ns + 2)
             self.noise2_array = np.sqrt(PSDv2_twosided) * np.sqrt(self.fs) * np.random.randn(self.Nbeats * self.ns + 2)
+            self.noise0_array = np.sqrt(PSDv0_twosided) * np.sqrt(self.fs) * np.random.randn(self.Nbeats * self.ns + 2)
             self.para.noise1_array = npct.as_ctypes(self.noise1_array)
             self.para.noise2_array = npct.as_ctypes(self.noise2_array)
+            self.para.noise0_array = npct.as_ctypes(self.noise0_array)
         else:
             self.add_thermal_noise = False
             self.para.add_thermal_noise = False
             self.noise1_array = None
             self.noise2_array = None
+            self.noise0_array = None
             self.para.noise1_array = c_double_p()
             self.para.noise2_array = c_double_p()
+            self.para.noise0_array = c_double_p()
 
     def simulate(self,
                  init=None, continue_run=False,
@@ -477,7 +492,7 @@ class SimulationParameters(object):
 
         Args:
             init (np.ndarray, optional): initial condition for the integrator,
-                if None use np.zeros(4) unless continue_run=True.
+                if None use np.zeros(NEQ) unless continue_run=True.
                 OBS: the data will be overwritten with the initial condition
                 for the next run!
             continue_run (bool, optional): use the end of the last run as
@@ -506,42 +521,43 @@ class SimulationParameters(object):
             however it can be useful for debugging purposes.
 
         Returns:
-            (np.ndarray): the solution array, with shape (Nbeats * ns, 4).
+            (np.ndarray): the solution array, with shape (Nbeats * ns, NEQ).
         """
         if self.drive_id == ID_NOT_SET:
             raise RuntimeError("No drive initialized! Use one of set_drive_none, set_drive_lockin, set_drive_V, set_drive_dVdt.")
         if self.add_thermal_noise:
             if len(self.noise1_array) != self.Nbeats * self.ns + 2:
                 raise RuntimeError("Wrong noise-array length! Regenerate or disable noise with set_noise_T.")
-        if self.drive_id == ID_DRIVE_V or self.drive_id == ID_DRIVE_dVdt:
+        if self.drive_id == ID_DRIVE_V:
             if len(self.drive_V_arr) != self.Nbeats * self.ns + 1:
                 raise RuntimeError("Wrong drive-array length! Reset drive with set_drive_V or set_drive_dVdt.")
         if init is None:
             if continue_run:
                 init = self.next_init
             else:
-                init = np.zeros(4)
+                init = np.zeros(NEQ)
         else:
             if not isinstance(init, np.ndarray):
                 raise TypeError("init must be a NumPy array!")
             if not init.dtype == np.float64:
                 raise TypeError("init must be of type np.float64!")
-            if not init.shape == (4,):
-                raise TypeError("init must have shape (4,)!")
+            if not init.shape == (NEQ,):
+                raise TypeError("init must have shape (NEQ,)!")
         t = self.dt * np.arange(self.Nbeats * self.ns + 1)
-        out = np.empty((len(t), 4))
+        out = np.empty((len(t), NEQ))
 
-        assert init.shape[0] == 4
+        assert init.shape[0] == NEQ
         assert t.shape[0] == out.shape[0]
-        assert out.shape[1] == 4
+        assert out.shape[1] == NEQ
 
         # rescale to simulation units
         if rescale:
             t /= T0
-            init[0] /= PHI0
-            init[1] /= PHI0 * F0
-            init[2] /= PHI0
-            init[3] /= PHI0 * F0
+            init[0] /= PHI0 * F0
+            init[1] /= PHI0
+            init[2] /= PHI0 * F0
+            init[3] /= PHI0
+            init[4] /= PHI0 * F0
             self.para.Cl /= T0
             self.para.Cr /= T0
             self.para.L1 /= T0
@@ -553,13 +569,13 @@ class SimulationParameters(object):
                 self.A_arr /= PHI0 * F0
             elif self.drive_id == ID_DRIVE_V:
                 self.drive_V_arr /= PHI0 * F0
-            elif self.drive_id == ID_DRIVE_dVdt:
-                self.drive_V_arr /= PHI0 * F0**2
-            self.para.duff *= PHI0**2
+            self.para.duff1 *= PHI0**2
+            self.para.duff2 *= PHI0**2
             self.para.phi0 /= PHI0
             if self.add_thermal_noise:
                 self.noise1_array /= PHI0 * F0
                 self.noise2_array /= PHI0 * F0
+                self.noise0_array /= PHI0 * F0
 
         t0 = time.time()
         res = c_lib.integrate_cvode(
@@ -580,14 +596,16 @@ class SimulationParameters(object):
         # rescale back to SI units
         if rescale:
             t *= T0
-            init[0] *= PHI0
-            init[1] *= PHI0 * F0
-            init[2] *= PHI0
-            init[3] *= PHI0 * F0
-            out[:, 0] *= PHI0
-            out[:, 1] *= PHI0 * F0
-            out[:, 2] *= PHI0
-            out[:, 3] *= PHI0 * F0
+            init[0] *= PHI0 * F0
+            init[1] *= PHI0
+            init[2] *= PHI0 * F0
+            init[3] *= PHI0
+            init[4] *= PHI0 * F0
+            out[:, 0] *= PHI0 * F0
+            out[:, 1] *= PHI0
+            out[:, 2] *= PHI0 * F0
+            out[:, 3] *= PHI0
+            out[:, 4] *= PHI0 * F0
             self.para.Cl *= T0
             self.para.Cr *= T0
             self.para.L1 *= T0
@@ -599,13 +617,13 @@ class SimulationParameters(object):
                 self.A_arr *= PHI0 * F0
             elif self.drive_id == ID_DRIVE_V:
                 self.drive_V_arr *= PHI0 * F0
-            elif self.drive_id == ID_DRIVE_dVdt:
-                self.drive_V_arr *= PHI0 * F0**2
-            self.para.duff /= PHI0**2
+            self.para.duff1 /= PHI0**2
+            self.para.duff2 /= PHI0**2
             self.para.phi0 *= PHI0
             if self.add_thermal_noise:
                 self.noise1_array *= PHI0 * F0
                 self.noise2_array *= PHI0 * F0
+                self.noise0_array *= PHI0 * F0
 
         self.next_init = init.copy()
         return out[:-1, :]
@@ -669,8 +687,44 @@ class SimulationParameters(object):
             f_out = n * df_out
         return f_out, df_out
 
+    def tf0(self, f):
+        """ Linear response function from the drive voltage V_G to the voltage
+        on the load V_0.
+
+        Args:
+            f (float or np.ndarray): frequency in hertz (Hz)
+
+        Returns:
+            (float or np.ndarray)
+        """
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        r1 = self.R1
+        r2 = self.R2
+        c1 = self.C1
+        c2 = self.C2
+        cL = self.Cl
+        cR = self.Cr
+        l1 = self.L1
+        l2 = self.L2
+
+        n0 = r1 * r2
+        n1 = (l2 * r1 + l1 * r2)
+        n2 = (l1 * l2 + ((c1 + cL + cR) * l1 + (c2 + cR) * l2) * r1 * r2)
+        n3 = ((c1 + cL + cR) * l1 * l2 * r1 + (c2 + cR) * l1 * l2 * r2)
+        n4 = (c2 * (c1 + cL) + (c1 + c2 + cL) * cR) * l1 * l2 * r1 * r2
+
+        d0 = r1 * r2
+        d1 = (l1 * r2 + r1 * (l2 + cL * r0 * r2))
+        d2 = (l1 * l2 + cL * l1 * r0 * r2 + r1 * (cL * l2 * r0 + (c1 + cL + cR) * l1 * r2 + (c2 + cR) * l2 * r2))
+        d3 = (cL * l1 * l2 * r0 + (c2 + cR) * l1 * l2 * r2 + r1 * ((c1 + cL + cR) * l1 * l2 + cL * ((c1 + cR) * l1 + (c2 + cR) * l2) * r0 * r2))
+        d4 = (cL * (c2 + cR) * l1 * l2 * r0 * r2 + l1 * l2 * r1 * (cL * (c1 + cR) * r0 + c2 * (c1 + cL) * r2 + (c1 + c2 + cL) * cR * r2))
+        d5 = cL * (c2 * cR + c1 * (c2 + cR)) * l1 * l2 * r0 * r1 * r2
+
+        return (n0 + n1 * s + n2 * s**2 + n3 * s**3 + n4 * s**4) / (d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4 + d5 * s**5)
+
     def tf1(self, f):
-        """ Linear transfer function from the drive voltage V_0 to the voltage
+        """ Linear response function from the drive voltage V_G to the voltage
         on the first oscillator (cavity) V_1.
 
         Args:
@@ -680,18 +734,31 @@ class SimulationParameters(object):
             (float or np.ndarray)
         """
         s = 1j * 2. * np.pi * f
-        Cl = self.Cl
-        Cr = self.Cr
-        R1 = self.R1
-        L1 = self.L1
-        C1 = self.C1
-        R2 = self.R2
-        L2 = self.L2
-        C2 = self.C2
-        return (Cl * L1 * R1 * s**2 * (R2 + L2 * s + (C2 + Cr) * L2 * R2 * s**2)) / (L1 * s * (R2 + L2 * s + (C2 + Cr) * L2 * R2 * s**2) + R1 * (R2 + L2 * s + ((C1 + Cl + Cr) * L1 + (C2 + Cr) * L2) * R2 * s**2 + (C1 + Cl + Cr) * L1 * L2 * s**3 + (C2 * (C1 + Cl) + (C1 + C2 + Cl) * Cr) * L1 * L2 * R2 * s**4))
+        r0 = self.R0
+        r1 = self.R1
+        r2 = self.R2
+        c1 = self.C1
+        c2 = self.C2
+        cL = self.Cl
+        cR = self.Cr
+        l1 = self.L1
+        l2 = self.L2
+
+        n2 = cL * l1 * r1 * r2
+        n3 = cL * l1 * l2 * r1
+        n4 = cL * (c2 + cR) * l1 * l2 * r1 * r2
+
+        d0 = r1 * r2
+        d1 = (l1 * r2 + r1 * (l2 + cL * r0 * r2))
+        d2 = (l1 * l2 + cL * l1 * r0 * r2 + r1 * (cL * l2 * r0 + (c1 + cL + cR) * l1 * r2 + (c2 + cR) * l2 * r2))
+        d3 = (cL * l1 * l2 * r0 + (c2 + cR) * l1 * l2 * r2 + r1 * ((c1 + cL + cR) * l1 * l2 + cL * ((c1 + cR) * l1 + (c2 + cR) * l2) * r0 * r2))
+        d4 = (cL * (c2 + cR) * l1 * l2 * r0 * r2 + l1 * l2 * r1 * (cL * (c1 + cR) * r0 + c2 * (c1 + cL) * r2 + (c1 + c2 + cL) * cR * r2))
+        d5 = cL * (c2 * cR + c1 * (c2 + cR)) * l1 * l2 * r0 * r1 * r2
+
+        return (n2 * s**2 + n3 * s**3 + n4 * s**4) / (d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4 + d5 * s**5)
 
     def tf2(self, f):
-        """ Linear transfer function from the drive voltage V_0 to the voltage
+        """ Linear response function from the drive voltage V_G to the voltage
         on the second oscillator (qubit) V_2.
 
         Args:
@@ -701,15 +768,38 @@ class SimulationParameters(object):
             (float or np.ndarray)
         """
         s = 1j * 2. * np.pi * f
-        Cl = self.Cl
-        Cr = self.Cr
-        R1 = self.R1
-        L1 = self.L1
-        C1 = self.C1
-        R2 = self.R2
-        L2 = self.L2
-        C2 = self.C2
-        return (Cl * Cr * L1 * L2 * R1 * R2 * s**4) / (L1 * s * (R2 + L2 * s + (C2 + Cr) * L2 * R2 * s**2) + R1 * (R2 + L2 * s + ((C1 + Cl + Cr) * L1 + (C2 + Cr) * L2) * R2 * s**2 + (C1 + Cl + Cr) * L1 * L2 * s**3 + (C2 * (C1 + Cl) + (C1 + C2 + Cl) * Cr) * L1 * L2 * R2 * s**4))
+        r0 = self.R0
+        r1 = self.R1
+        r2 = self.R2
+        c1 = self.C1
+        c2 = self.C2
+        cL = self.Cl
+        cR = self.Cr
+        l1 = self.L1
+        l2 = self.L2
+
+        n4 = cL * cR * l1 * l2 * r1 * r2
+
+        d0 = r1 * r2
+        d1 = (l1 * r2 + r1 * (l2 + cL * r0 * r2))
+        d2 = (l1 * l2 + cL * l1 * r0 * r2 + r1 * (cL * l2 * r0 + (c1 + cL + cR) * l1 * r2 + (c2 + cR) * l2 * r2))
+        d3 = (cL * l1 * l2 * r0 + (c2 + cR) * l1 * l2 * r2 + r1 * ((c1 + cL + cR) * l1 * l2 + cL * ((c1 + cR) * l1 + (c2 + cR) * l2) * r0 * r2))
+        d4 = (cL * (c2 + cR) * l1 * l2 * r0 * r2 + l1 * l2 * r1 * (cL * (c1 + cR) * r0 + c2 * (c1 + cL) * r2 + (c1 + c2 + cL) * cR * r2))
+        d5 = cL * (c2 * cR + c1 * (c2 + cR)) * l1 * l2 * r0 * r1 * r2
+
+        return (n4 * s**4) / (d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4 + d5 * s**5)
+
+    def tfr(self, f):
+        """ Linear response function from the drive voltage V_G to the voltage
+        reflected from the load V_0^-.
+
+        Args:
+            f (float or np.ndarray): frequency in hertz (Hz)
+
+        Returns:
+            (float or np.ndarray)
+        """
+        return self.tf0(f) - 0.5
 
 
 # Load the C library and set arguments and return types
@@ -788,9 +878,10 @@ class _SimPara(ctypes.Structure):
         ('R2', c_double),  # ohm
         ('L2', c_double),  # H
         ('C2', c_double),  # F
+        ('R0', c_double),  # ohm
 
         # Drive
-        ('drive_id', ctypes.c_int),  # ID_LOCKIN, ID_DRIVE_V or ID_DRIVE_dVdt
+        ('drive_id', ctypes.c_int),  # ID_LOCKIN, ID_DRIVE_V
         # Lockin
         ('nr_drives', ctypes.c_int),
         ('w_arr', c_double_p),  # rad/s
@@ -805,7 +896,8 @@ class _SimPara(ctypes.Structure):
         ('sys_id', ctypes.c_int),  # ID_LINEAR, ID_DUFFING, ID_JOSEPHSON or ID_JOSEPHSON_BOTH
 
         # Duffing: V/L * (1. - duff * V*V)
-        ('duff', c_double),  # V^-2
+        ('duff1', c_double),  # V^-2
+        ('duff2', c_double),  # V^-2
 
         # Josephson
         ('phi0', c_double),
@@ -813,11 +905,18 @@ class _SimPara(ctypes.Structure):
         # Thermal noise
         ('add_thermal_noise', ctypes.c_int),  # bool
         ('noise1_array', c_double_p),  # V
-        ('noise2_array', c_double_p),  # V
         ('noise1_spline', ctypes.c_void_p),  # internal
         ('noise1_acc', ctypes.c_void_p),  # internal
+        ('noise2_array', c_double_p),  # V
         ('noise2_spline', ctypes.c_void_p),  # internal
         ('noise2_acc', ctypes.c_void_p),  # internal
+        ('noise0_array', c_double_p),  # V
+        ('noise0_spline', ctypes.c_void_p),  # internal
+        ('noise0_acc', ctypes.c_void_p),  # internal
+
+        # Other internal
+        ('b', c_double * NEQ),
+        ('a', c_double * NEQ * NEQ),
     ]
 
 

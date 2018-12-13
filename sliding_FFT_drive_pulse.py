@@ -16,9 +16,9 @@ rcParams['ytick.labelsize'] = 'large'
 
 # PULSE = 'beat'
 # PULSE = 'sin'
-# PULSE = 'sin2'
+PULSE = 'sin2'
 # PULSE = 'square'
-PULSE = 'bump'
+# PULSE = 'bump'
 # PULSE = 'gauss'
 
 
