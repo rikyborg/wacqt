@@ -26,14 +26,14 @@ PULSE = 'sin2'
 para = sim.SimulationParameters(
     Cl=1e-16, Cr=6.19e-15,
     R1=2.50e8, L1=9.94e-10, C1=3.98e-13,
-    R2=6.24e8, L2=7.75e-9, C2=6.44e-14,  # ground, 01
-    # R2=6.24e8, L2=8.22e-9, C2=6.44e-14,  # excited, 12
+    # R2=6.24e8, L2=7.75e-9, C2=6.44e-14,  # ground, 01
+    R2=6.24e8, L2=8.22e-9, C2=6.44e-14,  # excited, 12
 )
 
 fc_ground = 7959147851.478515  # Hz
 fc_excited = 7956492274.9227495  # Hz
 # df_ = 1e6
-df_ = (fc_ground - fc_excited) / 2
+df_ = (fc_ground - fc_excited)
 fc_ = 0.5 * (fc_ground + fc_excited)
 if PULSE == 'beat':
     f1_ = fc_ - df_ / 2.
@@ -63,7 +63,7 @@ elif PULSE == 'sin':
 elif PULSE == 'sin2':
     carrier = AMP * np.cos(2. * np.pi * fc * t_drive)
     window = np.zeros_like(t_drive)
-    window[para.ns:2 * para.ns] = np.sin(2. * np.pi * 0.5 * df * t_drive[para.ns:2 * para.ns])**2
+    window[para.ns:3 * para.ns] = np.sin(2. * np.pi * 0.5 * df * t_drive[para.ns:3 * para.ns])**2
     drive = window * carrier
 elif PULSE == 'square':
     carrier = AMP * np.cos(2. * np.pi * fc * t_drive)
@@ -83,10 +83,10 @@ elif PULSE == 'gauss':
     window = np.exp(-(x / sigma)**2)
     drive = window * carrier
 
-PSDdrive_onesided = 4. * Boltzmann * 30e-3 * 50.  # 50 ohm at 30 mK
-PSDdrive_twosided = PSDdrive_onesided / 2.
-noisedrive_array = np.sqrt(PSDdrive_twosided) * np.sqrt(para.fs) * np.random.randn(len(drive))
-drive += noisedrive_array
+# PSDdrive_onesided = 4. * Boltzmann * 30e-3 * 50.  # 50 ohm at 30 mK
+# PSDdrive_twosided = PSDdrive_onesided / 2.
+# noisedrive_array = np.sqrt(PSDdrive_twosided) * np.sqrt(para.fs) * np.random.randn(len(drive))
+# drive += noisedrive_array
 para.set_drive_V(drive)
 
 para.set_noise_T(30e-3)
