@@ -253,8 +253,8 @@ static int ode_duffing(realtype t, N_Vector y, N_Vector ydot, void* user_data) {
     realtype P1 = NV_Ith_S(y, 1);
     realtype P2 = NV_Ith_S(y, 3);
     for (int ii=0; ii<NEQ; ii++) {
-        NV_Ith_S(ydot, ii) += -para->duff1 * para->a[ii][1] * P1*P1;
-        NV_Ith_S(ydot, ii) += -para->duff2 * para->a[ii][3] * P2*P2;
+        NV_Ith_S(ydot, ii) += -para->duff1 * para->a[ii][1] * P1*P1*P1;
+        NV_Ith_S(ydot, ii) += -para->duff2 * para->a[ii][3] * P2*P2*P2;
     }
 
     return(0);
@@ -272,8 +272,8 @@ static int jac_duffing(long int N, realtype t,
     realtype P1 = NV_Ith_S(y, 1);
     realtype P2 = NV_Ith_S(y, 3);
     for (int ii=0; ii<NEQ; ii++) {
-        DENSE_ELEM(J, ii, 1) += - 2. * para->duff1 * para->a[ii][1] * P1;
-        DENSE_ELEM(J, ii, 3) += - 2. * para->duff2 * para->a[ii][3] * P2;
+        DENSE_ELEM(J, ii, 1) += - 3. * para->duff1 * para->a[ii][1] * P1*P1;
+        DENSE_ELEM(J, ii, 3) += - 3. * para->duff2 * para->a[ii][3] * P2*P2;
     }
 
     return(0);
