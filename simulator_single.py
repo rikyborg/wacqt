@@ -687,6 +687,113 @@ class SimulationParameters(object):
         """
         return self.tf0(f) - 0.5
 
+    def tfn11(self, f):
+        """ Linear response function from the noise voltage Vn_1 to the voltage
+        on the first oscillator (cavity) V_1.
+
+        Args:
+            f (float or np.ndarray): frequency in hertz (Hz)
+
+        Returns:
+            (float or np.ndarray)
+        """
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        r1 = self.R1
+        c1 = self.C1
+        cL = self.Cl
+        l1 = self.L1
+
+        n1 = l1
+        n2 = cL * l1 * r0
+
+        d0 = r1
+        d1 = l1 + cL * r0 * r1
+        d2 = l1 * (c1 * r1 + cL * (r0 + r1))
+        d3 = c1 * cL * l1 * r0 * r1
+
+        return (n1 * s + n2 * s**2) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
+
+    def tfn10(self, f):
+        """ Linear response function from the noise voltage Vn_1 to the voltage
+        on the load V_0.
+
+        Args:
+            f (float or np.ndarray): frequency in hertz (Hz)
+
+        Returns:
+            (float or np.ndarray)
+        """
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        r1 = self.R1
+        c1 = self.C1
+        cL = self.Cl
+        l1 = self.L1
+
+        n2 = cL * l1 * r0
+
+        d0 = r1
+        d1 = l1 + cL * r0 * r1
+        d2 = l1 * (c1 * r1 + cL * (r0 + r1))
+        d3 = c1 * cL * l1 * r0 * r1
+
+        return (n2 * s**2) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
+
+    def tfn00(self, f):
+        """ Linear response function from the noise voltage Vn_0 to the voltage
+        on the load V_0.
+
+        Args:
+            f (float or np.ndarray): frequency in hertz (Hz)
+
+        Returns:
+            (float or np.ndarray)
+        """
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        r1 = self.R1
+        c1 = self.C1
+        cL = self.Cl
+        l1 = self.L1
+
+        n0 = r1
+        n1 = l1
+        n2 = (c1 + cL) * l1 * r1
+
+        d0 = r1
+        d1 = l1 + cL * r0 * r1
+        d2 = l1 * (c1 * r1 + cL * (r0 + r1))
+        d3 = c1 * cL * l1 * r0 * r1
+
+        return (n0 + n1 * s + n2 * s**2) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
+
+    def tfn01(self, f):
+        """ Linear response function from the noise voltage Vn_0 to the voltage
+        on the first oscillator (cavity) V_1.
+
+        Args:
+            f (float or np.ndarray): frequency in hertz (Hz)
+
+        Returns:
+            (float or np.ndarray)
+        """
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        r1 = self.R1
+        c1 = self.C1
+        cL = self.Cl
+        l1 = self.L1
+
+        n2 = cL * l1 * r1
+
+        d0 = r1
+        d1 = l1 + cL * r0 * r1
+        d2 = l1 * (c1 * r1 + cL * (r0 + r1))
+        d3 = c1 * cL * l1 * r0 * r1
+
+        return (n2 * s**2) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
+
 
 # Load the C library and set arguments and return types
 curr_folder = os.path.realpath(os.path.dirname(__file__))

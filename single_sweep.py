@@ -16,16 +16,23 @@ rcParams['legend.fontsize'] = 'large'
 rcParams['xtick.labelsize'] = 'large'
 rcParams['ytick.labelsize'] = 'large'
 
-df = 5e6  # Hz
-AMP = 1.  # V
-PHASE = 0.  # rad
-f_array = np.linspace(1e9, 5.5e9, 1000)
 para = sim.SimulationParameters(
-    Cl=1e-13,
-    R1=3162., L1=1e-9, C1=1e-12,
+    Cl=14e-15,
+    R1=200000., L1=6e-9, C1=240e-15,
+    fs=80e9,
 )
-# para.set_duffing(1e23)
-# para.set_josephson()
+df = 3e6  # Hz
+AMP = 1e-6  # V
+PHASE = 0.  # rad
+fstart = para.f01_d * (1. - 10. / para.Q1_d)
+fstop = para.f01_d * (1. + 10. / para.Q1_d)
+f_array1 = np.linspace(fstart, fstop, 500, endpoint=False)
+f_array2 = np.linspace(fstop, fstart, 500, endpoint=False)
+f_array = np.concatenate((f_array1, f_array2))
+PHI0 = 2.067833831e-15  # Wb, magnetic flux quantum
+fake_PHI0 = PHI0 * 20.  # junctions in series
+# para.set_duffing((2. * np.pi / fake_PHI0)**2 / 6)
+para.set_josephson(PHI0=fake_PHI0)
 
 actual_f_array = np.zeros_like(f_array)
 resp0_array = np.zeros_like(f_array, dtype=np.complex128)
@@ -33,7 +40,7 @@ resp1_array = np.zeros_like(f_array, dtype=np.complex128)
 reflected_array = np.zeros_like(f_array, dtype=np.complex128)
 
 # Run first time to get initial condition
-fd_, df_ = para.tune(f_array[0], df, priority='f', regular=True)
+fd_, df_ = para.tune(f_array[0], df, priority='f')
 para.set_df(df_)
 para.set_drive_lockin([fd_], [AMP], [PHASE])
 para.set_Nbeats(5)
@@ -43,7 +50,7 @@ para.set_Nbeats(2)
 t_start = time.time()
 for ii, fd in enumerate(f_array):
     print(ii)
-    fd_, df_ = para.tune(fd, df, priority='f', regular=True)
+    fd_, df_ = para.tune(fd, df, priority='f')
     nd_ = int(round(fd_ / df_))
     para.set_df(df_)
     para.set_drive_lockin([fd_], [AMP], [PHASE])
@@ -93,10 +100,10 @@ for ax_ in axr:
 
 # ax1.axvline(1e-9 * para.f01, ls='--', c='tab:blue')
 # ax1.axvline(1e-9 * para.f02, ls='--', c='tab:orange')
-ax0.semilogy(1e-9 * f_array, np.abs(G0), '-', c='tab:blue')
-ax0.semilogy(1e-9 * actual_f_array, 2. * np.abs(resp0_array) / AMP, '.', c='tab:blue', label=r'$V_0$')
-ax1.semilogy(1e-9 * f_array, np.abs(G1), '-', c='tab:blue')
-ax1.semilogy(1e-9 * actual_f_array, 2. * np.abs(resp1_array) / AMP, '.', c='tab:blue', label=r'$V_1$')
+ax0.plot(1e-9 * f_array, 20. * np.log10(np.abs(G0)), '-', c='tab:blue')
+ax0.plot(1e-9 * actual_f_array, 20. * np.log10(2. * np.abs(resp0_array) / AMP), '.', c='tab:blue', label=r'$V_0$')
+ax1.plot(1e-9 * f_array, 20. * np.log10(np.abs(G1)), '-', c='tab:blue')
+ax1.plot(1e-9 * actual_f_array, 20. * np.log10(2. * np.abs(resp1_array) / AMP), '.', c='tab:blue', label=r'$V_1$')
 
 # ax2.axvline(1e-9 * para.f01, ls='--', c='tab:blue', label='bare cavity')
 # ax2.axvline(1e-9 * para.f02, ls='--', c='tab:orange', label='bare qubit')
@@ -106,10 +113,10 @@ ax1r.plot(1e-9 * f_array, np.angle(G1), '-', c='tab:orange')
 ax1r.plot(1e-9 * actual_f_array, np.angle(resp1_array) - PHASE, '.', c='tab:orange')
 
 for ax_ in ax:
-    ax_.set_ylabel(r"Amplitude")
+    ax_.set_ylabel(r"Amplitude [dB]")
     ax_.legend()
 for ax_ in axr:
-    ax_.set_ylabel(r"Phase")
+    ax_.set_ylabel(r"Phase [rad]")
 ax1.set_xlabel(r"Frequency [$\mathrm{GHz}$]")
 # ax2.legend(ncol=2)
 fig.show()
