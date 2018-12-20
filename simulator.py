@@ -801,6 +801,163 @@ class SimulationParameters(object):
         """
         return self.tf0(f) - 0.5
 
+    def tfn00(self, f):
+        return self.tf0(f)
+
+    def tfn01(self, f):
+        return self.tf1(f)
+
+    def tfn02(self, f):
+        return self.tf2(f)
+
+    def tfn10(self, f):
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        r1 = self.R1
+        r2 = self.R2
+        c1 = self.C1
+        c2 = self.C2
+        cL = self.Cl
+        cR = self.Cr
+        l1 = self.L1
+        l2 = self.L2
+
+        n2 = cL * l1 * r0 * r2
+        n3 = cL * l1 * l2 * r0
+        n4 = cL * (c2 + cR) * l1 * l2 * r0 * r2
+
+        d0 = r1 * r2
+        d1 = (l1 * r2 + r1 * (l2 + cL * r0 * r2))
+        d2 = (l1 * l2 + cL * l1 * r0 * r2 + r1 * (cL * l2 * r0 + (c1 + cL + cR) * l1 * r2 + (c2 + cR) * l2 * r2))
+        d3 = (cL * l1 * l2 * r0 + (c2 + cR) * l1 * l2 * r2 + r1 * ((c1 + cL + cR) * l1 * l2 + cL * ((c1 + cR) * l1 + (c2 + cR) * l2) * r0 * r2))
+        d4 = (cL * (c2 + cR) * l1 * l2 * r0 * r2 + l1 * l2 * r1 * (cL * (c1 + cR) * r0 + c2 * (c1 + cL) * r2 + (c1 + c2 + cL) * cR * r2))
+        d5 = cL * (c2 * cR + c1 * (c2 + cR)) * l1 * l2 * r0 * r1 * r2
+
+        return (n2 * s**2 + n3 * s**3 + n4 * s**4) / (d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4 + d5 * s**5)
+
+    def tfn11(self, f):
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        r1 = self.R1
+        r2 = self.R2
+        c1 = self.C1
+        c2 = self.C2
+        cL = self.Cl
+        cR = self.Cr
+        l1 = self.L1
+        l2 = self.L2
+
+        n1 = l1 * r2
+        n2 = l1 * (l2 + cL * r0 * r2)
+        n3 = l1 * (cL * l2 * r0 + (c2 + cR) * l2 * r2)
+        n4 = cL * (c2 + cR) * l1 * l2 * r0 * r2
+
+        d0 = r1 * r2
+        d1 = (l1 * r2 + r1 * (l2 + cL * r0 * r2))
+        d2 = (l1 * l2 + cL * l1 * r0 * r2 + r1 * (cL * l2 * r0 + (c1 + cL + cR) * l1 * r2 + (c2 + cR) * l2 * r2))
+        d3 = (cL * l1 * l2 * r0 + (c2 + cR) * l1 * l2 * r2 + r1 * ((c1 + cL + cR) * l1 * l2 + cL * ((c1 + cR) * l1 + (c2 + cR) * l2) * r0 * r2))
+        d4 = (cL * (c2 + cR) * l1 * l2 * r0 * r2 + l1 * l2 * r1 * (cL * (c1 + cR) * r0 + c2 * (c1 + cL) * r2 + (c1 + c2 + cL) * cR * r2))
+        d5 = cL * (c2 * cR + c1 * (c2 + cR)) * l1 * l2 * r0 * r1 * r2
+
+        return (n1 * s + n2 * s**2 + n3 * s**3 + n4 * s**4) / (d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4 + d5 * s**5)
+
+    def tfn12(self, f):
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        r1 = self.R1
+        r2 = self.R2
+        c1 = self.C1
+        c2 = self.C2
+        cL = self.Cl
+        cR = self.Cr
+        l1 = self.L1
+        l2 = self.L2
+
+        n3 = cR * l1 * l2 * r2
+        n4 = cL * cR * l1 * l2 * r0 * r2
+
+        d0 = r1 * r2
+        d1 = (l1 * r2 + r1 * (l2 + cL * r0 * r2))
+        d2 = (l1 * l2 + cL * l1 * r0 * r2 + r1 * (cL * l2 * r0 + (c1 + cL + cR) * l1 * r2 + (c2 + cR) * l2 * r2))
+        d3 = (cL * l1 * l2 * r0 + (c2 + cR) * l1 * l2 * r2 + r1 * ((c1 + cL + cR) * l1 * l2 + cL * ((c1 + cR) * l1 + (c2 + cR) * l2) * r0 * r2))
+        d4 = (cL * (c2 + cR) * l1 * l2 * r0 * r2 + l1 * l2 * r1 * (cL * (c1 + cR) * r0 + c2 * (c1 + cL) * r2 + (c1 + c2 + cL) * cR * r2))
+        d5 = cL * (c2 * cR + c1 * (c2 + cR)) * l1 * l2 * r0 * r1 * r2
+
+        return (n3 * s**3 + n4 * s**4) / (d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4 + d5 * s**5)
+
+    def tfn20(self, f):
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        r1 = self.R1
+        r2 = self.R2
+        c1 = self.C1
+        c2 = self.C2
+        cL = self.Cl
+        cR = self.Cr
+        l1 = self.L1
+        l2 = self.L2
+
+        n4 = cL * cR * l1 * l2 * r0 * r1
+
+        d0 = r1 * r2
+        d1 = (l1 * r2 + r1 * (l2 + cL * r0 * r2))
+        d2 = (l1 * l2 + cL * l1 * r0 * r2 + r1 * (cL * l2 * r0 + (c1 + cL + cR) * l1 * r2 + (c2 + cR) * l2 * r2))
+        d3 = (cL * l1 * l2 * r0 + (c2 + cR) * l1 * l2 * r2 + r1 * ((c1 + cL + cR) * l1 * l2 + cL * ((c1 + cR) * l1 + (c2 + cR) * l2) * r0 * r2))
+        d4 = (cL * (c2 + cR) * l1 * l2 * r0 * r2 + l1 * l2 * r1 * (cL * (c1 + cR) * r0 + c2 * (c1 + cL) * r2 + (c1 + c2 + cL) * cR * r2))
+        d5 = cL * (c2 * cR + c1 * (c2 + cR)) * l1 * l2 * r0 * r1 * r2
+
+        return (n4 * s**4) / (d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4 + d5 * s**5)
+
+    def tfn21(self, f):
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        r1 = self.R1
+        r2 = self.R2
+        c1 = self.C1
+        c2 = self.C2
+        cL = self.Cl
+        cR = self.Cr
+        l1 = self.L1
+        l2 = self.L2
+
+        n3 = cR * l1 * l2 * r1
+        n4 = cL * cR * l1 * l2 * r0 * r1
+
+        d0 = r1 * r2
+        d1 = (l1 * r2 + r1 * (l2 + cL * r0 * r2))
+        d2 = (l1 * l2 + cL * l1 * r0 * r2 + r1 * (cL * l2 * r0 + (c1 + cL + cR) * l1 * r2 + (c2 + cR) * l2 * r2))
+        d3 = (cL * l1 * l2 * r0 + (c2 + cR) * l1 * l2 * r2 + r1 * ((c1 + cL + cR) * l1 * l2 + cL * ((c1 + cR) * l1 + (c2 + cR) * l2) * r0 * r2))
+        d4 = (cL * (c2 + cR) * l1 * l2 * r0 * r2 + l1 * l2 * r1 * (cL * (c1 + cR) * r0 + c2 * (c1 + cL) * r2 + (c1 + c2 + cL) * cR * r2))
+        d5 = cL * (c2 * cR + c1 * (c2 + cR)) * l1 * l2 * r0 * r1 * r2
+
+        return (n3 * s**3 + n4 * s**4) / (d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4 + d5 * s**5)
+
+    def tfn22(self, f):
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        r1 = self.R1
+        r2 = self.R2
+        c1 = self.C1
+        c2 = self.C2
+        cL = self.Cl
+        cR = self.Cr
+        l1 = self.L1
+        l2 = self.L2
+
+        n1 = l2 * r1
+        n2 = l2 * (l1 + cL * r0 * r1)
+        n3 = l1 * l2 * (cL * r0 + (c1 + cL + cR) * r1)
+        n4 = cL * (c1 + cR) * l1 * l2 * r0 * r1
+
+        d0 = r1 * r2
+        d1 = (l1 * r2 + r1 * (l2 + cL * r0 * r2))
+        d2 = (l1 * l2 + cL * l1 * r0 * r2 + r1 * (cL * l2 * r0 + (c1 + cL + cR) * l1 * r2 + (c2 + cR) * l2 * r2))
+        d3 = (cL * l1 * l2 * r0 + (c2 + cR) * l1 * l2 * r2 + r1 * ((c1 + cL + cR) * l1 * l2 + cL * ((c1 + cR) * l1 + (c2 + cR) * l2) * r0 * r2))
+        d4 = (cL * (c2 + cR) * l1 * l2 * r0 * r2 + l1 * l2 * r1 * (cL * (c1 + cR) * r0 + c2 * (c1 + cL) * r2 + (c1 + c2 + cL) * cR * r2))
+        d5 = cL * (c2 * cR + c1 * (c2 + cR)) * l1 * l2 * r0 * r1 * r2
+
+        return (n1 * s + n2 * s**2 + n3 * s**3 + n4 * s**4) / (d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4 + d5 * s**5)
+
 
 # Load the C library and set arguments and return types
 curr_folder = os.path.realpath(os.path.dirname(__file__))
