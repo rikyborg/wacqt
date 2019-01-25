@@ -90,12 +90,12 @@ Then make sure you have the required packages:
 ```
 conda install numpy scipy matplotlib ipython
 ```
-~~Download and install from source [SUNDIALS 2.7.0](https://computation.llnl.gov/projects/sundials/download/sundials-2.7.0.tar.gz), follow the instructions in the pdf inside the archive.~~ If the moving surface model works fine for you, you should have SUNDIALS already installed.
+~~Download and install from source [SUNDIALS 3.1.1](https://computation.llnl.gov/projects/sundials/download/sundials-3.1.1.tar.gz), follow the instructions in the pdf inside the archive.~~ If the moving surface model works fine for you, you should have SUNDIALS already installed.
 
-Download and install from source the GNU Scientific Library [GSL 2.4](http://ftpmirror.gnu.org/gsl/gsl-2.4.tar.gz):
+Download and install from source the GNU Scientific Library [GSL 2.5](http://ftpmirror.gnu.org/gsl/gsl-2.5.tar.gz):
 ```
-tar -zxvf gsl-2.4.tar.gz
-cd gsl-2.4
+tar -zxvf gsl-2.5.tar.gz
+cd gsl-2.5
 ./configure
 make
 sudo make install

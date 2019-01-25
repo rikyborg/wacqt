@@ -3,13 +3,13 @@
 #include <stdlib.h>
 #include <math.h>
 
-#include <cvode/cvode.h>             /* prototypes for CVODE fcts., consts. */
-#include <nvector/nvector_serial.h>  /* serial N_Vector types, fcts., macros */
-#include <sundials/sundials_types.h> /* definition of type realtype */
-#include <cvode/cvode_dense.h>       /* prototype for CVDense */
-#include <cvode/cvode_band.h>
-#include <cvode/cvode_diag.h>
-#include <sundials/sundials_math.h>
+#include <cvode/cvode.h>               /* prototypes for CVODE fcts., consts.  */
+#include <nvector/nvector_serial.h>    /* access to serial N_Vector            */
+#include <sunmatrix/sunmatrix_dense.h> /* access to dense SUNMatrix            */
+#include <sunlinsol/sunlinsol_dense.h> /* access to dense SUNLinearSolver      */
+#include <cvode/cvode_direct.h>        /* access to CVDls interface            */
+#include <sundials/sundials_types.h>   /* defs. of realtype, sunindextype      */
+
 #include <gsl/gsl_spline.h>
 
 // #define DEBUG
@@ -120,14 +120,6 @@ static int init_para(SimPara* para) {
 /* Functions Called by the Solver */
 static realtype V_drive(realtype t, void* user_data);
 static realtype V_noise(realtype t, int node, void* user_data);
-static int      ode_linear(realtype t, N_Vector y, N_Vector ydot, void* user_data);
-static int      ode_duffing(realtype t, N_Vector y, N_Vector ydot, void* user_data);
-static int      jac_linear(long int N, realtype t,
-                        N_Vector y, N_Vector fy, DlsMat J, void* user_data,
-                        N_Vector tmp1, N_Vector tmp2, N_Vector tmp3);
-static int      jac_duffing(long int N, realtype t,
-                        N_Vector y, N_Vector fy, DlsMat J, void* user_data,
-                        N_Vector tmp1, N_Vector tmp2, N_Vector tmp3);
 
 
 /* Private function to check function return values */
@@ -192,14 +184,13 @@ static int ode_linear(realtype t, N_Vector y, N_Vector ydot, void* user_data) {
 }
 
 
-static int jac_linear(long int N, realtype t,
-               N_Vector y, N_Vector fy, DlsMat J, void* user_data,
-               N_Vector tmp1, N_Vector tmp2, N_Vector tmp3) {
+static int jac_linear(realtype t, N_Vector y, N_Vector fy, SUNMatrix J,
+                      void *user_data, N_Vector tmp1, N_Vector tmp2, N_Vector tmp3) {
     SimPara* para = (SimPara*) user_data;
 
     for (int ii=0; ii<NEQ; ii++) {
         for (int jj=0; jj<NEQ; jj++) {
-            DENSE_ELEM(J, ii, jj) = para->a[ii][jj];
+            SM_ELEMENT_D(J, ii, jj) = para->a[ii][jj];
         }
     }
 
@@ -221,18 +212,17 @@ static int ode_duffing(realtype t, N_Vector y, N_Vector ydot, void* user_data) {
     return(0);
 }
 
-static int jac_duffing(long int N, realtype t,
-               N_Vector y, N_Vector fy, DlsMat J, void* user_data,
-               N_Vector tmp1, N_Vector tmp2, N_Vector tmp3) {
+static int jac_duffing(realtype t, N_Vector y, N_Vector fy, SUNMatrix J,
+                       void *user_data, N_Vector tmp1, N_Vector tmp2, N_Vector tmp3) {
     SimPara* para = (SimPara*) user_data;
 
     /* First do the linear part */
-    jac_linear(N, t, y, fy, J, user_data, tmp1, tmp2, tmp3);
+    jac_linear(t, y, fy, J, user_data, tmp1, tmp2, tmp3);
 
     /* Then add the Duffing terms */
     realtype P1 = NV_Ith_S(y, 1);
     for (int ii=0; ii<NEQ; ii++) {
-        DENSE_ELEM(J, ii, 1) += - 3. * para->duff1 * para->a[ii][1] * P1*P1;
+        SM_ELEMENT_D(J, ii, 1) += - 3. * para->duff1 * para->a[ii][1] * P1*P1;
     }
 
     return(0);
@@ -257,20 +247,19 @@ static int ode_josephson(realtype t, N_Vector y, N_Vector ydot, void* user_data)
 }
 
 
-static int jac_josephson(long int N, realtype t,
-               N_Vector y, N_Vector fy, DlsMat J, void* user_data,
-               N_Vector tmp1, N_Vector tmp2, N_Vector tmp3) {
+static int jac_josephson(realtype t, N_Vector y, N_Vector fy, SUNMatrix J,
+                         void *user_data, N_Vector tmp1, N_Vector tmp2, N_Vector tmp3) {
     SimPara* para = (SimPara*) user_data;
 
     /* First do the linear part */
-    jac_linear(N, t, y, fy, J, user_data, tmp1, tmp2, tmp3);
+    jac_linear(t, y, fy, J, user_data, tmp1, tmp2, tmp3);
 
     /* Then add the Josephson terms */
     realtype P1 = NV_Ith_S(y, 1);
     realtype PHI0 = para->phi0;
     for (int ii=0; ii<NEQ; ii++) {
-        DENSE_ELEM(J, ii, 1) -= para->a[ii][1];  // remove linear term
-        DENSE_ELEM(J, ii, 1) += para->a[ii][1] * cos(2.*M_PI*P1/PHI0);  // add cosine term
+        SM_ELEMENT_D(J, ii, 1) -= para->a[ii][1];  // remove linear term
+        SM_ELEMENT_D(J, ii, 1) += para->a[ii][1] * cos(2.*M_PI*P1/PHI0);  // add cosine term
     }
 
     return(0);
@@ -333,22 +322,30 @@ int integrate_cvode(void* user_data,
     // flag = CVodeRootInit(cvode_mem, 2, g);
     // if (check_flag(&flag, "CVodeRootInit", 1)) return(1);
 
-    /* Call CVDense to specify the CVDENSE dense linear solver */
-    flag = CVDense(cvode_mem, NEQ);
-    if (check_flag(&flag, "CVDense", 1)) return(1);
+    /* Create dense SUNMatrix for use in linear solves */
+    SUNMatrix A = SUNDenseMatrix(NEQ, NEQ);
+    if(check_flag((void *)A, "SUNDenseMatrix", 0)) return(1);
 
-    /* Set the Jacobian routine (user-supplied) */
+    /* Create dense SUNLinearSolver object for use by CVode */
+    SUNLinearSolver LS = SUNDenseLinearSolver(y, A);
+    if(check_flag((void *)LS, "SUNDenseLinearSolver", 0)) return(1);
+
+    /* Call CVDlsSetLinearSolver to attach the matrix and linear solver to CVode */
+    flag = CVDlsSetLinearSolver(cvode_mem, LS, A);
+    if(check_flag(&flag, "CVDlsSetLinearSolver", 1)) return(1);
+
+    /* Set the user-supplied Jacobian routine Jac */
     if (para->sys_id == ID_LINEAR) {
-        flag = CVDlsSetDenseJacFn(cvode_mem, jac_linear);
+        flag = CVDlsSetJacFn(cvode_mem, jac_linear);
     } else if (para->sys_id == ID_DUFFING) {
-        flag = CVDlsSetDenseJacFn(cvode_mem, jac_duffing);
+        flag = CVDlsSetJacFn(cvode_mem, jac_duffing);
     } else if (para->sys_id == ID_JOSEPHSON) {
-        flag = CVDlsSetDenseJacFn(cvode_mem, jac_josephson);
+        flag = CVDlsSetJacFn(cvode_mem, jac_josephson);
     } else {
         printf("*** UNKNOWN FORCE ID: %d ***\n", para->sys_id);
         return(1);
     }
-    if (check_flag(&flag, "CVDlsSetDenseJacFn", 1)) return(1);
+    if (check_flag(&flag, "CVDlsSetJacFn", 1)) return(1);
 
     // Set optional inputs
     flag = CVodeSetUserData(cvode_mem, user_data);
@@ -424,10 +421,16 @@ int integrate_cvode(void* user_data,
     // printf("DONE: tt %d, nout %d, tout %f, tret %f, tstop %f, dt %f\n", tt, nout, tout*1e9, tret*1e9, tstop*1e9, dt*1e9);
 
     /* Free y vector */
-    N_VDestroy_Serial(y);
+    N_VDestroy(y);
 
     /* Free integrator memory */
     CVodeFree(&cvode_mem);
+
+    /* Free the linear solver memory */
+    SUNLinSolFree(LS);
+
+    /* Free the matrix memory */
+    SUNMatDestroy(A);
 
     if (para->drive_id==ID_DRIVE_V) {
         gsl_spline_free(para->drive_spline);
