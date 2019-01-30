@@ -53,8 +53,8 @@ for ax_ in ax:
         TT = nn / para.df
         ax_.axvline(1e9 * TT, ls='--', c='tab:gray')
 ax1.plot(1e9 * t_drive, drive, c='tab:blue', label='drive [V]')
-ax2.plot(1e9 * t, 1e3 * sol[:, 1], c='tab:orange', label='Cavity V1 [mV]')
-ax3.plot(1e9 * t, 1e3 * sol[:, 3], c='tab:green', label='Qubit V2 [mV]')
+ax2.plot(1e9 * t, 1e3 * sol[:, 2], c='tab:orange', label='Cavity V1 [mV]')
+ax3.plot(1e9 * t, 1e3 * sol[:, 4], c='tab:green', label='Qubit V2 [mV]')
 for ax_ in ax:
     ax_.legend()
 ax3.set_xlabel("Time [ns]")

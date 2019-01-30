@@ -23,7 +23,8 @@ f_array = np.linspace(1e9, 5.5e9, 1000)
 para = sim.SimulationParameters(
     Cl=1e-16, Cr=6.19e-15,
     R1=2.50e8, L1=9.94e-10, C1=3.98e-13,
-    R2=6.24e8, L2=7.75e-9, C2=6.44e-14,
+    # R2=6.24e8, L2=7.75e-9, C2=6.44e-14,  # ground, 01
+    R2=6.24e8, L2=8.22e-9, C2=6.44e-14,  # excited, 12
 )
 # para.set_duffing(1e23)
 # para.set_josephson()
@@ -50,9 +51,9 @@ for ii, fd in enumerate(f_array):
     # para.set_noise_T(300.)
     sol = para.simulate(continue_run=True)
 
-    V1 = sol[-para.ns:, 1]
+    V1 = sol[-para.ns:, 2]
     V1_fft = np.fft.rfft(V1) / para.ns
-    V2 = sol[-para.ns:, 3]
+    V2 = sol[-para.ns:, 4]
     V2_fft = np.fft.rfft(V2) / para.ns
     actual_f_array[ii] = fd_
     resp1_array[ii] = V1_fft[nd_]

@@ -26,8 +26,8 @@ PULSE = 'sin2'
 para = sim.SimulationParameters(
     Cl=1e-16, Cr=6.19e-15,
     R1=2.50e8, L1=9.94e-10, C1=3.98e-13,
-    # R2=6.24e8, L2=7.75e-9, C2=6.44e-14,  # ground, 01
-    R2=6.24e8, L2=8.22e-9, C2=6.44e-14,  # excited, 12
+    R2=6.24e8, L2=7.75e-9, C2=6.44e-14,  # ground, 01
+    # R2=6.24e8, L2=8.22e-9, C2=6.44e-14,  # excited, 12
 )
 
 fc_ground = 7959147851.478515  # Hz
@@ -37,10 +37,10 @@ df_ = (fc_ground - fc_excited)
 fc_ = 0.5 * (fc_ground + fc_excited)
 if PULSE == 'beat':
     f1_ = fc_ - df_ / 2.
-    f1, df = para.tune(f1_, df_, priority='f', regular=True)
+    f1, df = para.tune(f1_, df_, priority='f')  # , regular=True)
     f2 = f1 + df
 else:  # square or bump or gauss
-    fc, df = para.tune(fc_, df_, priority='f', regular=True)
+    fc, df = para.tune(fc_, df_, priority='f')  # , regular=True)
 
 AMP = 10e-6  # V
 
@@ -92,8 +92,8 @@ para.set_drive_V(drive)
 para.set_noise_T(30e-3)
 para.set_josephson()
 sol = para.simulate()
-V1 = sol[:, 1]
-V2 = sol[:, 3]
+V1 = sol[:, 2]
+V2 = sol[:, 4]
 
 fig1 = plt.figure(figsize=(12.8, 4.8))
 ax11 = fig1.add_subplot(3, 2, 1)

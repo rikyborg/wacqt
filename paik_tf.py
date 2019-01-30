@@ -16,7 +16,8 @@ rcParams['ytick.labelsize'] = 'large'
 
 # f_array = np.linspace(6e9, 9e9, 100000)
 # f_array = np.linspace(7.958e9, 7.960e9, 100000)
-f_array = np.linspace(7.955e9, 7.957e9, 100000)
+# f_array = np.linspace(7.955e9, 7.957e9, 100000)
+f_array = np.linspace(6.59e9, 6.60e9, 100000)
 para = sim.SimulationParameters(
     Cl=1e-16, Cr=6.19e-15,
     R1=2.50e8, L1=9.94e-10, C1=3.98e-13,
@@ -29,13 +30,13 @@ G2 = para.tf2(f_array)
 
 fig, ax = plt.subplots(2, 1, sharex=True, tight_layout=True)
 ax1, ax2 = ax
-ax1.axvline(1e-9 * para.f01, ls='--', c='tab:blue')
-ax1.axvline(1e-9 * para.f02, ls='--', c='tab:orange')
+ax1.axvline(1e-9 * para.f01_d, ls='--', c='tab:blue')
+ax1.axvline(1e-9 * para.f02_d, ls='--', c='tab:orange')
 ax1.semilogy(1e-9 * f_array, np.abs(G1), '-', c='tab:blue')
 ax1.semilogy(1e-9 * f_array, np.abs(G2), '-', c='tab:orange')
 
-ax2.axvline(1e-9 * para.f01, ls='--', c='tab:blue', label='bare cavity')
-ax2.axvline(1e-9 * para.f02, ls='--', c='tab:orange', label='bare qubit')
+ax2.axvline(1e-9 * para.f01_d, ls='--', c='tab:blue', label='bare cavity')
+ax2.axvline(1e-9 * para.f02_d, ls='--', c='tab:orange', label='bare qubit')
 ax2.plot(1e-9 * f_array, np.angle(G1), '-', c='tab:blue', label='linear cavity')
 ax2.plot(1e-9 * f_array, np.angle(G2), '-', c='tab:orange', label='linear qubit')
 
