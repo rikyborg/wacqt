@@ -45,7 +45,7 @@ else:  # square or bump or gauss
 AMP = 10e-6  # V
 
 para.set_df(df)
-para.set_Nbeats(4)
+para.set_Nbeats(8)
 
 t = para.get_time_arr()
 t_drive = para.get_drive_time_arr()
@@ -63,7 +63,8 @@ elif PULSE == 'sin':
 elif PULSE == 'sin2':
     carrier = AMP * np.cos(2. * np.pi * fc * t_drive)
     window = np.zeros_like(t_drive)
-    window[para.ns:3 * para.ns] = np.sin(2. * np.pi * 0.5 * df * t_drive[para.ns:3 * para.ns])**2
+    # window[3 * para.ns:4 * para.ns] = np.sin(2. * np.pi * 0.5 * df * t_drive[3 * para.ns:4 * para.ns])**2
+    window[3 * para.ns:5 * para.ns] = np.sin(2. * np.pi * 0.5 * df * t_drive[3 * para.ns:5 * para.ns])**2
     drive = window * carrier
 elif PULSE == 'square':
     carrier = AMP * np.cos(2. * np.pi * fc * t_drive)
