@@ -7,25 +7,25 @@ from scipy.constants import Boltzmann, Planck
 import simulator_single as sim
 
 para_g = sim.SimulationParameters(
-    Cl=float.fromhex('0x1.d900307dad616p-44'),
-    R1=float.fromhex('0x1.5134882b7a3a9p+19'),
-    L1=float.fromhex('0x1.97a112542a4e2p-36'),
-    C1=float.fromhex('0x1.a9f95ac362cecp-35'),
+    Cl=float.fromhex('0x1.aa3cb37aa5689p-44'),
+    R1=float.fromhex('0x1.9bf34b49d10cap+18'),
+    L1=float.fromhex('0x1.f238ab87b1e96p-37'),
+    C1=float.fromhex('0x1.5cd92a11283ecp-34'),
     R0=50.,
     fs=100e9,
 )
 para_e = sim.SimulationParameters(
-    Cl=float.fromhex('0x1.d900307dad616p-44'),
-    R1=float.fromhex('0x1.5134882b7a3a9p+19'),
-    L1=float.fromhex('0x1.94f7301817a9dp-36'),
-    C1=float.fromhex('0x1.a9ef70a3f4f56p-35'),
+    Cl=float.fromhex('0x1.aa3cb37aa5689p-44'),
+    R1=float.fromhex('0x1.9bf34b49d10cap+18'),
+    L1=float.fromhex('0x1.eef68b985824bp-37'),
+    C1=float.fromhex('0x1.5cd187545c47bp-34'),
     R0=50.,
     fs=100e9,
 )
-w_g = float.fromhex('0x1.bc5de40ce9d27p+34')
-w_e = float.fromhex('0x1.bdd8967667a65p+34')
-Ql_g = float.fromhex('0x1.78a47cffcd8d8p+11')
-Ql_e = float.fromhex('0x1.779cb183fdc2bp+11')
+w_g = float.fromhex('0x1.bc5de38222a9dp+34')
+w_e = float.fromhex('0x1.bdd8960b3458bp+34')
+Ql_g = float.fromhex('0x1.78ae6176bebf1p+12')
+Ql_e = float.fromhex('0x1.778d86c108368p+12')
 
 w_c = 0.5 * (w_e + w_g)
 chi = 0.5 * (w_e - w_g)
@@ -68,14 +68,14 @@ para_e.set_Nbeats(6)
 # print("])")
 # raise RuntimeError
 para_g.next_init = np.array([
-    float.fromhex('-0x1.9febc1c27f532p-20'),
-    float.fromhex('0x1.05ee96271d49dp-60'),
-    float.fromhex('0x1.2f4c7aa8a0307p-26'),
+    float.fromhex('0x1.5af74561d47ffp-21'),
+    float.fromhex('-0x1.785f030a323ddp-62'),
+    float.fromhex('0x1.0102fbc27bd15p-25'),
 ])
 para_e.next_init = np.array([
-    float.fromhex('-0x1.3043237bc23b8p-21'),
-    float.fromhex('0x1.a9b707cea9f99p-62'),
-    float.fromhex('-0x1.4686bf0fa54fdp-27'),
+    float.fromhex('0x1.6a30d340ecb89p-22'),
+    float.fromhex('-0x1.60efc51e9c887p-61'),
+    float.fromhex('-0x1.628100e1d2c92p-25'),
 ])
 
 t = para_g.get_time_arr()
@@ -168,55 +168,3 @@ ax23.plot(t_envelope, np.angle(Vr_g_envelope))
 ax23.plot(t_envelope, np.angle(Vr_e_envelope))
 
 fig2.show()
-
-"""
-
-
-
-
-
-
-
-
-correct = 0
-for ii in range(100):
-    para_g.next_init = np.array([
-        float.fromhex('-0x1.9febc1c27f532p-20'),
-        float.fromhex('0x1.05ee96271d49dp-60'),
-        float.fromhex('0x1.2f4c7aa8a0307p-26'),
-    ])
-    para_e.next_init = np.array([
-        float.fromhex('-0x1.3043237bc23b8p-21'),
-        float.fromhex('0x1.a9b707cea9f99p-62'),
-        float.fromhex('-0x1.4686bf0fa54fdp-27'),
-    ])
-    para_g.set_noise_T(Tph, T0)
-    para_e.set_noise_T(Tph, T0)
-    
-    sol_g = para_g.simulate(continue_run=True)  # use init from above
-    V0_g = sol_g[:, 0]
-    Vr_g = V0_g - (Vg / 2.)
-    sol_e = para_e.simulate(continue_run=True)  # use init from above
-    V0_e = sol_e[:, 0]
-    Vr_e = V0_e - (Vg / 2.)
-    
-    Vr_g_spectrum = np.fft.rfft(Vr_g) / len(Vr_g)
-    Vr_e_spectrum = np.fft.rfft(Vr_e) / len(Vr_e)
-    
-    Vr_g_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
-    Vr_e_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
-    
-    Vr_g_envelope_spectrum[karray - para_g.Nbeats * nc] = Vr_g_spectrum[karray]
-    Vr_e_envelope_spectrum[karray - para_e.Nbeats * nc] = Vr_e_spectrum[karray]
-    
-    Vr_g_envelope = np.fft.ifft(Vr_g_envelope_spectrum) * Npoints
-    Vr_e_envelope = np.fft.ifft(Vr_e_envelope_spectrum) * Npoints
-    
-    sg = Vr_g_envelope[250:750]
-    se = Vr_e_envelope[250:750]
-    
-    if np.real(np.sum(np.conj(tg - te) * sg)) > 0.:
-        correct += 1
-    if np.real(np.sum(np.conj(tg - te) * se)) < 0.:
-        correct += 1
-"""

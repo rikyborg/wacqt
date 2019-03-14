@@ -9,7 +9,8 @@ import simulator_single as sim
 _wc = 2. * np.pi * 4.754e9
 _chi = 2. * np.pi * 7.9e6
 _Qb = 1e6
-_kappa = 2. * np.pi * 37.5e6 / 1e2
+# _kappa = 2. * np.pi * 37.5e6
+_kappa = _chi / 5.
 _Ql = _wc / _kappa
 
 res, para_g, para_e = sim.SimulationParameters.from_measurement(_wc, _chi, _Qb, _Ql)
@@ -96,3 +97,24 @@ print("w_c / 2pi: {:.3f} GHz, rel. err.: {:.1g}".format(1e-9 * w_c / (2. * np.pi
 print("chi / 2pi: {:.3f} MHz, rel. err.: {:.1g}".format(1e-6 * chi / (2. * np.pi), (np.abs(chi) - _chi) / _chi))
 print("kappa_g / 2pi: {:.3f} kHz, rel. err.: {:.1g}".format(1e-3 * kappa_g / (2. * np.pi), (kappa_g - _kappa) / _kappa))
 print("kappa_e / 2pi: {:.3f} kHz, rel. err.: {:.1g}".format(1e-3 * kappa_e / (2. * np.pi), (kappa_e - _kappa) / _kappa))
+
+print("para_g = sim.SimulationParameters(")
+print("    Cl=float.fromhex('{:s}'),".format(para_g.Cl.hex()))
+print("    R1=float.fromhex('{:s}'),".format(para_g.R1.hex()))
+print("    L1=float.fromhex('{:s}'),".format(para_g.L1.hex()))
+print("    C1=float.fromhex('{:s}'),".format(para_g.C1.hex()))
+print("    R0=50.,")
+print("    fs=100e9,")
+print(")")
+print("para_e = sim.SimulationParameters(")
+print("    Cl=float.fromhex('{:s}'),".format(para_e.Cl.hex()))
+print("    R1=float.fromhex('{:s}'),".format(para_e.R1.hex()))
+print("    L1=float.fromhex('{:s}'),".format(para_e.L1.hex()))
+print("    C1=float.fromhex('{:s}'),".format(para_e.C1.hex()))
+print("    R0=50.,")
+print("    fs=100e9,")
+print(")")
+print("w_g = float.fromhex('{:s}')".format(w_g.hex()))
+print("w_e = float.fromhex('{:s}')".format(w_e.hex()))
+print("Ql_g = float.fromhex('{:s}')".format(Ql_g.hex()))
+print("Ql_e = float.fromhex('{:s}')".format(Ql_e.hex()))

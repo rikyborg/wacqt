@@ -46,7 +46,7 @@ class SimulationParameters(object):
         def erf(p):
             Cl, R1, C1_g, L1_g, C1_e, L1_e = p
 
-            Cl *= 1e-12
+            Cl *= 1e-9
             R1 *= 1e6
             C1_g *= 1e-9
             L1_g *= 1e-9
@@ -105,14 +105,14 @@ class SimulationParameters(object):
             return logerr
 
         # x0 = [1.] * 6
-        x0 = [1. / wc / 1e3 * 1e12, Qb / 1e6, 1. / (wc + chi) * 1e9, 1. / (wc + chi) * 1e9, 1. / (wc - chi) * 1e9, 1. / (wc - chi) * 1e9]
+        x0 = [1. / wc / 1e1 * 1e9, Qb / 1e6, 1. / (wc + chi) * 1e9, 1. / (wc + chi) * 1e9, 1. / (wc - chi) * 1e9, 1. / (wc - chi) * 1e9]
         # bounds = [(1e-6, None)] * 6
         bounds = (1e-6, np.inf)
         # res = minimize(erf, x0, bounds=bounds)
         res = least_squares(erf, x0, bounds=bounds)
 
         Cl, R1, C1_g, L1_g, C1_e, L1_e = res.x
-        Cl *= 1e-12
+        Cl *= 1e-9
         R1 *= 1e6
         C1_g *= 1e-9
         L1_g *= 1e-9
