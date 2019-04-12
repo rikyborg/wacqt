@@ -6,14 +6,15 @@ from scipy.optimize import least_squares
 
 import simulator as sim
 
-_wc = 2. * np.pi * 4.754e9
-_chi = 2. * np.pi * 7.9e6
+_wc = 2. * np.pi * 6e9
+_chi = 2. * np.pi * 2e6
 _Qb = 1e6
 # _kappa = 2. * np.pi * 37.5e6 / 1e2
 _kappa = _chi / 10
 _Ql = _wc / _kappa
 
-res, para_g, para_e = sim.SimulationParameters.from_measurement(_wc, _chi, _Qb, _Ql)
+# res, para_g, para_e = sim.SimulationParameters.from_measurement(_wc, _chi, _Qb, _Ql)
+res, para_g, para_e = sim.SimulationParameters.from_measurement_crit_in(_wc, _chi, _Qb, _Ql)
 
 freqs = np.linspace(
     (_wc - 2 * _chi) / (2. * np.pi),
