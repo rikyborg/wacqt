@@ -49,11 +49,11 @@ typedef struct SimPara {
     int stiff_equation;  // bool
 
     /* Circuit */
+    realtype R0;  // ohm
     realtype Cl;  // F
     realtype R1;  // ohm
     realtype L1;  // H
     realtype C1;  // F
-    realtype R0;  // ohm
 
     /* Drive */
     int drive_id;  // ID_LOCKIN, ID_DRIVE_V
@@ -78,12 +78,12 @@ typedef struct SimPara {
 
     /* Thermal noise */
     int add_thermal_noise;  // bool
-    realtype* noise1_arr;  // V
-    gsl_spline* noise1_spline;  // internal
-    gsl_interp_accel* noise1_acc;  // internal
     realtype* noise0_arr;  // V
     gsl_spline* noise0_spline;  // internal
     gsl_interp_accel* noise0_acc;  // internal
+    realtype* noise1_arr;  // V
+    gsl_spline* noise1_spline;  // internal
+    gsl_interp_accel* noise1_acc;  // internal
 
     /* Other internal */
     realtype b[NEQ];

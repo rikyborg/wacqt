@@ -1,4 +1,4 @@
-from __future__ import division, print_function
+from __future__ import absolute_import, division, print_function
 
 from copy import copy
 import ctypes
@@ -9,7 +9,7 @@ import time
 import numpy as np
 import numpy.ctypeslib as npct
 from scipy.constants import Boltzmann
-from scipy.optimize import least_squares, minimize
+from scipy.optimize import least_squares
 
 ID_NOT_SET = -1
 
@@ -27,9 +27,9 @@ c_double = ctypes.c_double
 c_double_p = ctypes.POINTER(ctypes.c_double)
 c_double_pp = ctypes.POINTER(c_double_p)
 
-PHI0 = 2.067833831e-15  # Wb, magnetic flux quantum
-T0 = 1e-9  # s, time scale
-F0 = 1e9  # Hz, frequency scale
+__PHI__ = 2.067833831e-15  # Wb, magnetic flux quantum
+__T__ = 1e-9  # s, time scale
+__F__ = 1e9  # Hz, frequency scale
 
 
 class SimulationParameters(object):
@@ -54,30 +54,10 @@ class SimulationParameters(object):
             L1_e *= 1e-9
 
             para_g = cls(Cl=Cl, R1=R1, L1=L1_g, C1=C1_g, R0=R0)
-            pc_g = para_g.get_tf_den_coeff()
-            roots_g = np.roots(pc_g)
-            idx_g = np.iscomplex(roots_g)
-            try:
-                assert idx_g.sum() == 2
-            except AssertionError:
-                print('g: ', roots_g, p)
-                # return np.nan
-            root1_g, root2_g = roots_g[idx_g]
-            my_w0_g = np.sqrt(np.real(root1_g * root2_g))
-            my_Ql_g = np.real(my_w0_g / (-root1_g - root2_g))
+            my_w0_g, my_Ql_g = para_g.calculate_resonance()
 
             para_e = cls(Cl=Cl, R1=R1, L1=L1_e, C1=C1_e, R0=R0)
-            pc_e = para_e.get_tf_den_coeff()
-            roots_e = np.roots(pc_e)
-            idx_e = np.iscomplex(roots_e)
-            try:
-                assert idx_e.sum() == 2
-            except AssertionError:
-                print('e: ', roots_e)
-                # return np.nan
-            root1_e, root2_e = roots_e[idx_e]
-            my_w0_e = np.sqrt(np.real(root1_e * root2_e))
-            my_Ql_e = np.real(my_w0_e / (-root1_e - root2_e))
+            my_w0_e, my_Ql_e = para_e.calculate_resonance()
 
             my_Qb_g = R1 * np.sqrt(C1_g / L1_g)
             my_Qb_e = R1 * np.sqrt(C1_e / L1_e)
@@ -85,14 +65,15 @@ class SimulationParameters(object):
             my_wc = 0.5 * (my_w0_g + my_w0_e)
             my_chi = 0.5 * np.abs(my_w0_g - my_w0_e)
 
-            relerr = np.array([
-                (my_wc - wc) / wc,
-                (my_chi - chi) / chi,
-                (my_Ql_g - Ql) / Ql,
-                (my_Ql_e - Ql) / Ql,
-                (my_Qb_g - Qb) / Qb,
-                (my_Qb_e - Qb) / Qb,
-            ])
+            # relerr = np.array([
+            #     (my_wc - wc) / wc,
+            #     (my_chi - chi) / chi,
+            #     (my_Ql_g - Ql) / Ql,
+            #     (my_Ql_e - Ql) / Ql,
+            #     (my_Qb_g - Qb) / Qb,
+            #     (my_Qb_e - Qb) / Qb,
+            # ])
+            # return np.sum(relerr**2)
             logerr = np.array([
                 np.log(np.abs(my_wc / wc)),
                 np.log(np.abs(my_chi / chi)),
@@ -101,14 +82,10 @@ class SimulationParameters(object):
                 np.log(np.abs(my_Qb_g / Qb)),
                 np.log(np.abs(my_Qb_e / Qb)),
             ])
-            # return np.sum(relerr**2)
             return logerr
 
-        # x0 = [1.] * 6
         x0 = [1. / wc / 1e1 * 1e9, Qb / 1e6, 1. / (wc + chi) * 1e9, 1. / (wc + chi) * 1e9, 1. / (wc - chi) * 1e9, 1. / (wc - chi) * 1e9]
-        # bounds = [(1e-6, None)] * 6
         bounds = (1e-6, np.inf)
-        # res = minimize(erf, x0, bounds=bounds)
         res = least_squares(erf, x0, bounds=bounds)
 
         Cl, R1, C1_g, L1_g, C1_e, L1_e = res.x
@@ -131,11 +108,11 @@ class SimulationParameters(object):
     ):
         """
         Args:
-            Cl (float): left coupling capacitance (drive to V_1) in farad (F)
+            Cl (float): input coupling capacitance in farad (F)
             R1 (float): cavity resistance in ohm (Omega)
             L1 (float): cavity inductance in henry (H)
             C1 (float): cavity capacitance in farad (F)
-            R0 (float, optional): transmission line impedance in ohm (Omega)
+            R0 (float, optional): input transmission line impedance in ohm (Omega)
             fs (float, optional): sampling frequency in hertz (Hz)
         """
         self.Cl = Cl
@@ -178,10 +155,10 @@ class SimulationParameters(object):
         self.phi0 = 1.
 
         self.add_thermal_noise = False
-        self.noise_T1 = 0.  # K
         self.noise_T0 = 0.  # K
-        self.noise1_array = None
+        self.noise_T1 = 0.  # K
         self.noise0_array = None
+        self.noise1_array = None
 
         self.next_init = np.zeros(NEQ)
 
@@ -211,8 +188,8 @@ class SimulationParameters(object):
         self.para.phi0 = float(self.phi0)
 
         self.para.add_thermal_noise = self.add_thermal_noise
-        self.para.noise1_array = c_double_p()
         self.para.noise0_array = c_double_p()
+        self.para.noise1_array = c_double_p()
 
     def pickable_copy(self):
         """ Return a pickable copy of this object. Useful e.g. to save the
@@ -470,15 +447,15 @@ class SimulationParameters(object):
         self.sys_id = ID_JOSEPHSON
         self.para.sys_id = int(self.sys_id)
 
-    def set_noise_T(self, T, T0=None, seed=None):
+    def set_noise_T(self, T1, T0=None, seed=None):
         """ Set strength of the thermal (process) noise on the two oscillators
         (cavity and qubit);
 
         Args:
-            T (float): cavity noise temperature in kelvin (K). Set to zero to
+            T1 (float): oscillator noise temperature in kelvin (K). Set to zero to
                 turn of the simulation of the noise (default).
-            T0 (float, optional): drive noise temperature in kelvin (K).
-                If None, use the same as the cavity
+            T0 (float, optional): input line noise temperature in kelvin (K).
+                If None, use the same as the oscillator
             seed (int, optional): seed the random-number generator in NumPy
 
         Notes:
@@ -494,29 +471,29 @@ class SimulationParameters(object):
             R is R1, R2 or R0 for cavity, qbit or drive, respectively.
         """
         if T0 is None:
-            T0 = T
-        self.noise_T1 = float(T)
+            T0 = T1
         self.noise_T0 = float(T0)
+        self.noise_T1 = float(T1)
 
         if self.noise_T1 or self.noise_T0:
-            PSDv1_onesided = 4. * Boltzmann * self.noise_T1 * self.R1
             PSDv0_onesided = 4. * Boltzmann * self.noise_T0 * self.R0
-            PSDv1_twosided = PSDv1_onesided / 2.
+            PSDv1_onesided = 4. * Boltzmann * self.noise_T1 * self.R1
             PSDv0_twosided = PSDv0_onesided / 2.
+            PSDv1_twosided = PSDv1_onesided / 2.
             self.add_thermal_noise = True
             self.para.add_thermal_noise = True
             np.random.seed(seed)
-            self.noise1_array = np.sqrt(PSDv1_twosided) * np.sqrt(self.fs) * np.random.randn(self.Nbeats * self.ns + 2)
             self.noise0_array = np.sqrt(PSDv0_twosided) * np.sqrt(self.fs) * np.random.randn(self.Nbeats * self.ns + 2)
-            self.para.noise1_array = npct.as_ctypes(self.noise1_array)
+            self.noise1_array = np.sqrt(PSDv1_twosided) * np.sqrt(self.fs) * np.random.randn(self.Nbeats * self.ns + 2)
             self.para.noise0_array = npct.as_ctypes(self.noise0_array)
+            self.para.noise1_array = npct.as_ctypes(self.noise1_array)
         else:
             self.add_thermal_noise = False
             self.para.add_thermal_noise = False
-            self.noise1_array = None
             self.noise0_array = None
-            self.para.noise1_array = c_double_p()
+            self.noise1_array = None
             self.para.noise0_array = c_double_p()
+            self.para.noise1_array = c_double_p()
 
     def simulate(self,
                  init=None, continue_run=False,
@@ -541,14 +518,14 @@ class SimulationParameters(object):
             For info on setting tolerances, see
             https://computation.llnl.gov/projects/sundials/faq#cvode_tols
             When rescale=True, the simulation is run in scaled units:
-            - time in units of T0 = 1 ns,
-            - flux in units of PHI0 = 2.067833831e-15 Wb.
+            - time in units of __T__ = 1 ns,
+            - flux in units of __PHI__ = 2.067833831e-15 Wb.
             As a consequence, other quantities are:
-            - frequency in units of F0 = 1 / T0 = 1 GHz,
-            - voltage in units of PHI0 * F0,
+            - frequency in units of __F__ = 1 / __T__ = 1 GHz,
+            - voltage in units of __PHI__ * __F__,
             - capacitance in nanofarad (nF),
             - inductance in nanohenry (nH),
-            - duffing term in units of PHI0**(-2).
+            - duffing term in units of __PHI__**(-2).
             All the relevant quantities are rescaled before the simulation,
             and scaled back to SI units after the calculation. Setting
             rescale=False turns off the rescaling and is not recommended,
@@ -586,23 +563,23 @@ class SimulationParameters(object):
 
         # rescale to simulation units
         if rescale:
-            t /= T0
-            init[0] /= PHI0 * F0
-            init[1] /= PHI0
-            init[2] /= PHI0 * F0
-            self.para.Cl /= T0
-            self.para.L1 /= T0
-            self.para.C1 /= T0
+            t /= __T__
+            init[0] /= __PHI__ * __F__
+            init[1] /= __PHI__
+            init[2] /= __PHI__ * __F__
+            self.para.Cl /= __T__
+            self.para.L1 /= __T__
+            self.para.C1 /= __T__
             if self.drive_id == ID_LOCKIN:
-                self.w_arr /= F0
-                self.A_arr /= PHI0 * F0
+                self.w_arr /= __F__
+                self.A_arr /= __PHI__ * __F__
             elif self.drive_id == ID_DRIVE_V:
-                self.drive_V_arr /= PHI0 * F0
-            self.para.duff1 *= PHI0**2
-            self.para.phi0 /= PHI0
+                self.drive_V_arr /= __PHI__ * __F__
+            self.para.duff1 *= __PHI__**2
+            self.para.phi0 /= __PHI__
             if self.add_thermal_noise:
-                self.noise1_array /= PHI0 * F0
-                self.noise0_array /= PHI0 * F0
+                self.noise0_array /= __PHI__ * __F__
+                self.noise1_array /= __PHI__ * __F__
 
         t0 = time.time()
         res = c_lib.integrate_cvode(
@@ -622,26 +599,26 @@ class SimulationParameters(object):
 
         # rescale back to SI units
         if rescale:
-            t *= T0
-            init[0] *= PHI0 * F0
-            init[1] *= PHI0
-            init[2] *= PHI0 * F0
-            out[:, 0] *= PHI0 * F0
-            out[:, 1] *= PHI0
-            out[:, 2] *= PHI0 * F0
-            self.para.Cl *= T0
-            self.para.L1 *= T0
-            self.para.C1 *= T0
+            t *= __T__
+            init[0] *= __PHI__ * __F__
+            init[1] *= __PHI__
+            init[2] *= __PHI__ * __F__
+            out[:, 0] *= __PHI__ * __F__
+            out[:, 1] *= __PHI__
+            out[:, 2] *= __PHI__ * __F__
+            self.para.Cl *= __T__
+            self.para.L1 *= __T__
+            self.para.C1 *= __T__
             if self.drive_id == ID_LOCKIN:
-                self.w_arr *= F0
-                self.A_arr *= PHI0 * F0
+                self.w_arr *= __F__
+                self.A_arr *= __PHI__ * __F__
             elif self.drive_id == ID_DRIVE_V:
-                self.drive_V_arr *= PHI0 * F0
-            self.para.duff1 /= PHI0**2
-            self.para.phi0 *= PHI0
+                self.drive_V_arr *= __PHI__ * __F__
+            self.para.duff1 /= __PHI__**2
+            self.para.phi0 *= __PHI__
             if self.add_thermal_noise:
-                self.noise1_array *= PHI0 * F0
-                self.noise0_array *= PHI0 * F0
+                self.noise0_array *= __PHI__ * __F__
+                self.noise1_array *= __PHI__ * __F__
 
         self.next_init = init.copy()
         return out[:-1, :]
@@ -705,6 +682,22 @@ class SimulationParameters(object):
             f_out = n * df_out
         return f_out, df_out
 
+    def calculate_resonance(self):
+        """ Calculate resonance frequency and quality factor from the poles of the transfer function.
+
+        Returns:
+            w0 (float): resonance frequency in rad/s
+            Q (float): quality factor
+        """
+        pc = self.get_tf_den_coeff()
+        roots = np.roots(pc)
+        idx = np.iscomplex(roots)
+        assert idx.sum() == 2
+        root1, root2 = roots[idx]
+        w0 = np.sqrt(np.real(root1 * root2))
+        Q = np.real(w0 / (-root1 - root2))
+        return w0, Q
+
     def get_tf_den_coeff(self):
         r0 = self.R0
         r1 = self.R1
@@ -721,7 +714,7 @@ class SimulationParameters(object):
 
     def tf0(self, f):
         """ Linear response function from the drive voltage V_G to the voltage
-        on the load V_0.
+        at the input port V_0.
 
         Args:
             f (float or np.ndarray): frequency in hertz (Hz)
@@ -749,7 +742,7 @@ class SimulationParameters(object):
 
     def tf1(self, f):
         """ Linear response function from the drive voltage V_G to the voltage
-        on the first oscillator (cavity) V_1.
+        on the oscillator V_1.
 
         Args:
             f (float or np.ndarray): frequency in hertz (Hz)
@@ -775,7 +768,7 @@ class SimulationParameters(object):
 
     def tfr(self, f):
         """ Linear response function from the drive voltage V_G to the voltage
-        reflected from the load V_0^-.
+        reflected at the input port V_0^-.
 
         Args:
             f (float or np.ndarray): frequency in hertz (Hz)
@@ -787,7 +780,7 @@ class SimulationParameters(object):
 
     def tfn11(self, f):
         """ Linear response function from the noise voltage Vn_1 to the voltage
-        on the first oscillator (cavity) V_1.
+        on the oscillator V_1.
 
         Args:
             f (float or np.ndarray): frequency in hertz (Hz)
@@ -812,9 +805,36 @@ class SimulationParameters(object):
 
         return (n1 * s + n2 * s**2) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
 
+    def tfn1P1(self, f):
+        """ Linear response function from the noise voltage Vn_1 to the flux
+        on the oscillator P_1.
+
+        Args:
+            f (float or np.ndarray): frequency in hertz (Hz)
+
+        Returns:
+            (float or np.ndarray)
+        """
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        r1 = self.R1
+        c1 = self.C1
+        cL = self.Cl
+        l1 = self.L1
+
+        n0 = l1
+        n1 = cL * l1 * r0
+
+        d0 = r1
+        d1 = l1 + cL * r0 * r1
+        d2 = l1 * (c1 * r1 + cL * (r0 + r1))
+        d3 = c1 * cL * l1 * r0 * r1
+
+        return (n0 + n1 * s) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
+
     def tfn10(self, f):
         """ Linear response function from the noise voltage Vn_1 to the voltage
-        on the load V_0.
+        at the input port V_0.
 
         Args:
             f (float or np.ndarray): frequency in hertz (Hz)
@@ -840,7 +860,7 @@ class SimulationParameters(object):
 
     def tfn00(self, f):
         """ Linear response function from the noise voltage Vn_0 to the voltage
-        on the load V_0.
+        at the input port V_0.
 
         Args:
             f (float or np.ndarray): frequency in hertz (Hz)
@@ -868,7 +888,7 @@ class SimulationParameters(object):
 
     def tfn01(self, f):
         """ Linear response function from the noise voltage Vn_0 to the voltage
-        on the first oscillator (cavity) V_1.
+        on the oscillator V_1.
 
         Args:
             f (float or np.ndarray): frequency in hertz (Hz)
@@ -892,6 +912,32 @@ class SimulationParameters(object):
 
         return (n2 * s**2) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
 
+    def tfn0P1(self, f):
+        """ Linear response function from the noise voltage Vn_0 to the flux
+        on the oscillator P_1.
+
+        Args:
+            f (float or np.ndarray): frequency in hertz (Hz)
+
+        Returns:
+            (float or np.ndarray)
+        """
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        r1 = self.R1
+        c1 = self.C1
+        cL = self.Cl
+        l1 = self.L1
+
+        n1 = cL * l1 * r1
+
+        d0 = r1
+        d1 = l1 + cL * r0 * r1
+        d2 = l1 * (c1 * r1 + cL * (r0 + r1))
+        d3 = c1 * cL * l1 * r0 * r1
+
+        return (n1 * s) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
+
 
 # Load the C library and set arguments and return types
 curr_folder = os.path.realpath(os.path.dirname(__file__))
@@ -904,7 +950,7 @@ elif sys.platform == 'darwin':
     my_ext = '.bundle'
 elif sys.platform.startswith('linux'):
     my_ext = '.so'
-load_path = os.path.join(curr_folder, "sim_cvode_single" + my_ext)
+load_path = os.path.join(curr_folder, "sim_cvode" + my_ext)
 c_lib = ctypes.cdll.LoadLibrary(load_path)
 c_lib.integrate_cvode.restype = ctypes.c_int
 c_lib.integrate_cvode.argtypes = [
@@ -961,11 +1007,11 @@ class _SimPara(ctypes.Structure):
         ('stiff_equation', ctypes.c_int),  # bool
 
         # Circuit
+        ('R0', c_double),  # ohm
         ('Cl', c_double),  # F
         ('R1', c_double),  # ohm
         ('L1', c_double),  # H
         ('C1', c_double),  # F
-        ('R0', c_double),  # ohm
 
         # Drive
         ('drive_id', ctypes.c_int),  # ID_LOCKIN, ID_DRIVE_V
@@ -990,12 +1036,12 @@ class _SimPara(ctypes.Structure):
 
         # Thermal noise
         ('add_thermal_noise', ctypes.c_int),  # bool
-        ('noise1_array', c_double_p),  # V
-        ('noise1_spline', ctypes.c_void_p),  # internal
-        ('noise1_acc', ctypes.c_void_p),  # internal
         ('noise0_array', c_double_p),  # V
         ('noise0_spline', ctypes.c_void_p),  # internal
         ('noise0_acc', ctypes.c_void_p),  # internal
+        ('noise1_array', c_double_p),  # V
+        ('noise1_spline', ctypes.c_void_p),  # internal
+        ('noise1_acc', ctypes.c_void_p),  # internal
 
         # Other internal
         ('b', c_double * NEQ),

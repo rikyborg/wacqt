@@ -55,6 +55,6 @@ ax.plot(xx, yy, '--', c='tab:orange')
 ax.legend(title="F = {:.1%}".format(fidelity))
 ax.set_xlabel(r'Signal [$\mathrm{V}^2$]')
 ax.set_ylabel('Counts')
-ax.set_title(r"Transmission -- $\chi / \kappa = {:.0f}$".format(chi / kappa))
+ax.set_title(r"Reflection -- $\chi / \kappa = {:.0f}$".format(chi / kappa))
 
 fig.show()

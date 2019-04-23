@@ -12,9 +12,9 @@ _Qb = 10e6
 # _kappa = 2. * np.pi * 37.5e6 / 1e2
 _kappa = _chi / 2
 _Ql = _wc / _kappa
-AMP = 3.550e-5  # V
+AMP = 8.698e-7  # V
 
-res, para_g, para_e = sim.SimulationParameters.from_measurement_crit_in(_wc, _chi, _Qb, _Ql)
+res, para_g, para_e = sim.SimulationParameters.from_measurement(_wc, _chi, _Qb, _Ql)
 
 w_g, Q_g = para_g.calculate_resonance()
 w_e, Q_e = para_e.calculate_resonance()
@@ -25,7 +25,6 @@ kappa = 0.5 * (w_g / Q_g + w_e / Q_e)
 Eph = hbar * w_c
 Tph = 0.  # 0.5 * Eph / Boltzmann
 T0 = 0.  # Tph  # K
-T2 = T0
 
 _fc = w_c / (2. * np.pi)
 _df = 2. * np.abs(chi) / (2. * np.pi)
@@ -37,8 +36,8 @@ para_e.set_df(df)
 # Nrelax = int(round(2. * np.pi * df / kappa))
 # para_g.set_Nbeats(3 * Nrelax)
 # para_e.set_Nbeats(3 * Nrelax)
-# para_g.set_noise_T(T1=Tph, T0=T0, T2=T2)
-# para_e.set_noise_T(T1=Tph, T0=T0, T2=T2)
+# para_g.set_noise_T(T1=Tph, T0=T0)
+# para_e.set_noise_T(T1=Tph, T0=T0)
 # para_g.set_drive_none()
 # para_e.set_drive_none()
 # para_g.simulate(print_time=True)
@@ -47,8 +46,8 @@ para_e.set_df(df)
 # readout run
 para_g.set_Nbeats(4)
 para_e.set_Nbeats(4)
-para_g.set_noise_T(T1=Tph, T0=T0, T2=T2)
-para_e.set_noise_T(T1=Tph, T0=T0, T2=T2)
+para_g.set_noise_T(T1=Tph, T0=T0)
+para_e.set_noise_T(T1=Tph, T0=T0)
 
 t = para_g.get_time_arr()
 t_drive = para_g.get_drive_time_arr()
@@ -68,13 +67,11 @@ sol_g = para_g.simulate(print_time=True)  # , continue_run=True)
 V0_g = sol_g[:, 0]
 P1_g = sol_g[:, 1]
 V1_g = sol_g[:, 2]
-V2_g = sol_g[:, 3]
 Vr_g = V0_g - (Vg / 2.)
 sol_e = para_e.simulate(print_time=True)  # , continue_run=True)
 V0_e = sol_e[:, 0]
 P1_e = sol_e[:, 1]
 V1_e = sol_e[:, 2]
-V2_e = sol_e[:, 3]
 Vr_e = V0_e - (Vg / 2.)
 
 
@@ -88,41 +85,33 @@ Vg_spectrum = np.fft.rfft(Vg) / len(Vg)
 Vr_g_spectrum = np.fft.rfft(Vr_g) / len(Vr_g)
 P1_g_spectrum = np.fft.rfft(P1_g) / len(P1_g)
 V1_g_spectrum = np.fft.rfft(V1_g) / len(V1_g)
-V2_g_spectrum = np.fft.rfft(V2_g) / len(V2_g)
 Vr_e_spectrum = np.fft.rfft(Vr_e) / len(Vr_e)
 P1_e_spectrum = np.fft.rfft(P1_e) / len(P1_e)
 V1_e_spectrum = np.fft.rfft(V1_e) / len(V1_e)
-V2_e_spectrum = np.fft.rfft(V2_e) / len(V2_e)
 
 Vg_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
 Vr_g_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
 P1_g_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
 V1_g_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
-V2_g_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
 Vr_e_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
 P1_e_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
 V1_e_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
-V2_e_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
 
 Vg_envelope_spectrum[karray - para_g.Nbeats * nc] = Vg_spectrum[karray]
 Vr_g_envelope_spectrum[karray - para_g.Nbeats * nc] = Vr_g_spectrum[karray]
 P1_g_envelope_spectrum[karray - para_g.Nbeats * nc] = P1_g_spectrum[karray]
 V1_g_envelope_spectrum[karray - para_g.Nbeats * nc] = V1_g_spectrum[karray]
-V2_g_envelope_spectrum[karray - para_g.Nbeats * nc] = V2_g_spectrum[karray]
 Vr_e_envelope_spectrum[karray - para_e.Nbeats * nc] = Vr_e_spectrum[karray]
 P1_e_envelope_spectrum[karray - para_e.Nbeats * nc] = P1_e_spectrum[karray]
 V1_e_envelope_spectrum[karray - para_e.Nbeats * nc] = V1_e_spectrum[karray]
-V2_e_envelope_spectrum[karray - para_e.Nbeats * nc] = V2_e_spectrum[karray]
 
 Vg_envelope = np.fft.ifft(Vg_envelope_spectrum) * Npoints
 Vr_g_envelope = np.fft.ifft(Vr_g_envelope_spectrum) * Npoints
 P1_g_envelope = np.fft.ifft(P1_g_envelope_spectrum) * Npoints
 V1_g_envelope = np.fft.ifft(V1_g_envelope_spectrum) * Npoints
-V2_g_envelope = np.fft.ifft(V2_g_envelope_spectrum) * Npoints
 Vr_e_envelope = np.fft.ifft(Vr_e_envelope_spectrum) * Npoints
 P1_e_envelope = np.fft.ifft(P1_e_envelope_spectrum) * Npoints
 V1_e_envelope = np.fft.ifft(V1_e_envelope_spectrum) * Npoints
-V2_e_envelope = np.fft.ifft(V2_e_envelope_spectrum) * Npoints
 
 nr_ph_g = 0.5 * 2. * np.abs(P1_g_envelope)**2 / para_g.L1 / (hbar * w_g)
 nr_ph_e = 0.5 * 2. * np.abs(P1_e_envelope)**2 / para_e.L1 / (hbar * w_e)
@@ -133,8 +122,8 @@ print("Photons left in |g>: max {:.2g}, mean {:.2g}".format(nr_ph_g[idx_after].m
 print("Photons left in |e>: max {:.2g}, mean {:.2g}".format(nr_ph_e[idx_after].max(), nr_ph_e[idx_after].mean()))
 
 
-fig1, ax1 = plt.subplots(4, 1, sharex=True, tight_layout=True)
-ax11, ax12, ax13, ax14 = ax1
+fig1, ax1 = plt.subplots(3, 1, sharex=True, tight_layout=True)
+ax11, ax12, ax13 = ax1
 
 ax11.plot(1e6 * t_envelope, 1e6 * 2 * np.abs(Vg_envelope))
 ax12.plot(1e6 * t_envelope, 1e6 * 2 * np.abs(Vr_g_envelope))
@@ -142,25 +131,21 @@ ax12.plot(1e6 * t_envelope, 1e6 * 2 * np.abs(Vr_e_envelope))
 ax13.axvspan(1e6 * t_envelope[Npoints // 2], 1e6 * t_envelope[3 * Npoints // 4], color='tab:gray', alpha=0.5)
 ax13.plot(1e6 * t_envelope, nr_ph_g)
 ax13.plot(1e6 * t_envelope, nr_ph_e)
-ax14.plot(1e6 * t_envelope, 1e6 * 2 * np.abs(V2_g_envelope))
-ax14.plot(1e6 * t_envelope, 1e6 * 2 * np.abs(V2_e_envelope))
 
 ax11.set_title("Amplitude")
-ax14.set_xlabel(r"Time [$\mathrm{\mu s}$]")
+ax13.set_xlabel(r"Time [$\mathrm{\mu s}$]")
 fig1.show()
 
 
-fig2, ax2 = plt.subplots(4, 1, sharex=True, tight_layout=True)
-ax21, ax22, ax23, ax24 = ax2
+fig2, ax2 = plt.subplots(3, 1, sharex=True, tight_layout=True)
+ax21, ax22, ax23 = ax2
 
 ax21.plot(1e6 * t_envelope, np.angle(Vg_envelope))
 ax22.plot(1e6 * t_envelope, np.angle(Vr_g_envelope))
 ax22.plot(1e6 * t_envelope, np.angle(Vr_e_envelope))
 ax23.plot(1e6 * t_envelope, np.angle(V1_g_envelope))
 ax23.plot(1e6 * t_envelope, np.angle(V1_e_envelope))
-ax24.plot(1e6 * t_envelope, np.angle(V2_g_envelope))
-ax24.plot(1e6 * t_envelope, np.angle(V2_e_envelope))
 
 ax21.set_title("Phase")
-ax24.set_xlabel(r"Time [$\mathrm{\mu s}$]")
+ax23.set_xlabel(r"Time [$\mathrm{\mu s}$]")
 fig2.show()
