@@ -6,35 +6,49 @@ import qutip as qt
 
 amp = 1e-1
 phase = np.pi / 2
-fr = 1.  # resonator frequency
-wr = 2. * np.pi * fr
+fc = 6.  # resonator frequency
+wc = 2. * np.pi * fc
 Q = 100.
-kappa = wr / Q
+kappa = wc / Q
+
+fq = 5.  # qubit frequency
+wq = 2. * np.pi * fq
+
+chi = kappa
+delta = wq - wc
+g = np.sqrt(np.abs(chi * delta))
 
 # cavity operators
 N = 30
-a = qt.destroy(N)
+a = qt.tensor(qt.destroy(N), qt.qeye(2))
 nc = a.dag() * a
 xc = 0.5 * (a + a.dag())
 yc = -0.5j * (a - a.dag())
 
-I = qt.qeye(N)
+# qubit operators
+sm = qt.tensor(qt.qeye(N), qt.sigmam())
+sz = qt.tensor(qt.qeye(N), qt.sigmaz())
+
+I = qt.tensor(qt.qeye(N), qt.qeye(2))
 
 # Hamiltonian
-H0 = wr * (a.dag() * a)
+wrot = wc
+H0 = (wc - wrot) * (a.dag() * a) + 0.5 * (wq - wrot) * sz
+# V = g * (a * sm.dag() + a.dag() * sm)
+V = chi * (a.dag() * a + I / 2) * sz
 # Hd = 0.5 * amp * (a * np.exp(1j * phase) + a.dag() * np.exp(-1j * phase))
 Hd = 0.5 * amp * (a + a.dag())
 
-H = Hd
+H = H0 + V
 # H = [H0, [a, 'A * exp(1j*wd*t)'], [a.dag(), 'A * exp(-1j*wd*t)']]
 
 # Initial state
-psi0 = qt.coherent(N, 0.)
+psi0 = qt.tensor(qt.coherent(N, 2.), qt.basis(2, 1))
 
 # Time evolution
-fs = 10 * fr
+fs = 10 * fc
 dt = 1. / fs
-df = 0.01  # kappa / (2. * np.pi)
+df = kappa / (2. * np.pi)
 ns = int(round(fs / df))
 df = fs / ns
 T = 1. / df
@@ -44,16 +58,18 @@ Nt = Nr + Np
 # tlist = np.linspace(0., 500., 5000)
 tlist = np.linspace(0., T * Nt, ns * Nt, endpoint=False)
 t0 = time.time()
-res = qt.mesolve(H, psi0, tlist, [np.sqrt(kappa) * a], [], args={'wd': wr, 'A': amp / 2})
+res = qt.mesolve(H, psi0, tlist, [np.sqrt(kappa) * a], [], args={'wd': wc, 'A': amp / 2})
 t1 = time.time()
 print(t1 - t0)
 
 # Excitation numbers
 nc_list = qt.expect(nc, res.states)
+sz_list = qt.expect(sz, res.states)
 
 fig1 = plt.figure(tight_layout=True)
 ax1 = fig1.add_subplot(1, 1, 1)
 ax1.plot(tlist, nc_list, label='cavity')
+ax1.plot(tlist, sz_list, label='qubit')
 ax1.set_xlabel("Time [ns]")
 ax1.set_ylabel("<n>")
 ax1.legend()
@@ -73,7 +89,7 @@ ax2.legend()
 fig2.show()
 
 # cavity state distribution
-rho_c = res.states[-1]
+rho_c = qt.ptrace(res.states[-1], 0)
 xvec = np.linspace(-5, 5, 200)
 W_c = qt.wigner(rho_c, xvec, xvec)
 wlim = np.abs(W_c).max()
