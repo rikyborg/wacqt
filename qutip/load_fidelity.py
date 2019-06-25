@@ -1,3 +1,4 @@
+import matplotlib.cm as mplcm
 from matplotlib.colors import LogNorm
 import matplotlib.pyplot as plt
 import numpy as np
@@ -89,9 +90,9 @@ f_p = 0.5 * (f_pg + f_pe)
 print("Theoretical: {:.1%}".format(f_p))
 print("Infidelity: {:.2e}".format(1. - f_p))
 
-fig2, ax2 = plt.subplots(tight_layout=True)
 
 if False:
+    fig2, ax2 = plt.subplots(tight_layout=True)
     n, bins, patches = ax2.hist(scores_p[idx_pg], bins=100, color='tab:blue', alpha=0.5, label='|g>')
     xx = np.linspace(bins.min(), bins.max(), 200)
     N_pg = idx_pg.sum()
@@ -110,7 +111,9 @@ if False:
     ax2.set_xlabel(r'Signal [$\mathrm{V}^2$]')
     ax2.set_ylabel('Counts')
     ax2.set_title(r"Superposition -- $\chi / \kappa = {:.0f}$".format(chi / kappa))
+    fig2.show()
 else:
+    fig2, ax2 = plt.subplots(tight_layout=True)
     Nbins = 128
     counts = np.zeros(Nbins, dtype=np.int64)
     thomo = np.zeros(Nbins)
@@ -121,13 +124,27 @@ else:
         kk = min(kk, Nbins - 1)
         counts[kk] += 1
         thomo[kk] += ssz[ii, -1]
-    ax2.plot(low + np.arange(Nbins) * step, thomo / counts)
+    thomo /= counts
+
+    ax2.axhline(0., ls='--', c='tab:gray')
+    ax2.axvline(0., ls='--', c='tab:gray')
+    ax2.plot(low + np.arange(Nbins) * step, thomo)
 
     ax2.set_xlabel(r'Signal [$\mathrm{V}^2$]')
     ax2.set_ylabel(r'$\left< \sigma_\mathrm{Z} \right>$')
     ax2.set_title(r"Superposition -- $\chi / \kappa = {:.0f}$".format(chi / kappa))
-fig2.show()
+    fig2.show()
 
+    fig2b, ax2b = plt.subplots(tight_layout=True)
+
+    # n, bins, patches = ax2b.hist(scores_p, bins=Nbins)
+    n, bins, patches = ax2b.hist(scores_p, bins=low + np.arange(Nbins + 1) * step)
+
+    cmap = mplcm.get_cmap('cividis')
+    for ii, patch in enumerate(patches):
+        patch.set_color(cmap((thomo[ii] + 1) / 2))
+
+    fig2b.show()
 
 xx = np.tile(tlist, Ntraj)
 yy = ssz.flatten()
