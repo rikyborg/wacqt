@@ -10,9 +10,9 @@ _wc = 2. * np.pi * 6e9
 _chi = 2. * np.pi * 2e6
 _Qb = 10e6
 # _kappa = 2. * np.pi * 37.5e6 / 1e2
-_kappa = _chi / 2
+_kappa = _chi / 10
 _Ql = _wc / _kappa
-AMP = 8.698e-7  # V
+AMP = 1.598e-6  # V
 
 res, para_g, para_e = sim.SimulationParameters.from_measurement(_wc, _chi, _Qb, _Ql)
 
@@ -128,7 +128,8 @@ ax11, ax12, ax13 = ax1
 ax11.plot(1e6 * t_envelope, 1e6 * 2 * np.abs(Vg_envelope))
 ax12.plot(1e6 * t_envelope, 1e6 * 2 * np.abs(Vr_g_envelope))
 ax12.plot(1e6 * t_envelope, 1e6 * 2 * np.abs(Vr_e_envelope))
-ax13.axvspan(1e6 * t_envelope[Npoints // 2], 1e6 * t_envelope[3 * Npoints // 4], color='tab:gray', alpha=0.5)
+# ax13.axvspan(1e6 * t_envelope[Npoints // 2], 1e6 * t_envelope[3 * Npoints // 4], color='tab:gray', alpha=0.5)
+ax13.axvline(1e6 * t_envelope[Npoints // 2], ls='--', color='tab:gray')
 ax13.plot(1e6 * t_envelope, nr_ph_g)
 ax13.plot(1e6 * t_envelope, nr_ph_e)
 
@@ -143,6 +144,7 @@ ax21, ax22, ax23 = ax2
 ax21.plot(1e6 * t_envelope, np.angle(Vg_envelope))
 ax22.plot(1e6 * t_envelope, np.angle(Vr_g_envelope))
 ax22.plot(1e6 * t_envelope, np.angle(Vr_e_envelope))
+ax23.axvline(1e6 * t_envelope[Npoints // 2], ls='--', color='tab:gray')
 ax23.plot(1e6 * t_envelope, np.angle(V1_g_envelope))
 ax23.plot(1e6 * t_envelope, np.angle(V1_e_envelope))
 
