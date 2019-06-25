@@ -1,6 +1,7 @@
 *.o
 *.so
 *.pyc
+*.pyx
 *.dll
 *.bundle
 *.bak
