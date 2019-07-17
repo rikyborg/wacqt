@@ -76,6 +76,11 @@ class MyProgressBar():
 
 
 USE_SSE = True  # stochastic Schrödinger equation, otherwise stochastic master equation
+
+# HAMILTONIAN = "JC"
+HAMILTONIAN = "RWA"
+# HAMILTONIAN = "DISP"
+
 Ntraj = 65536
 
 amp = 6.35e-1
@@ -106,23 +111,33 @@ xc = 0.5 * (a + a.dag())
 yc = -0.5j * (a - a.dag())
 
 # qubit operators
-sm = qt.tensor(qt.qeye(N), qt.sigmam())
-sz = qt.tensor(qt.qeye(N), qt.sigmaz())
-sx = qt.tensor(qt.qeye(N), qt.sigmax())
-sy = qt.tensor(qt.qeye(N), qt.sigmay())
+sigmam = qt.tensor(qt.qeye(N), qt.sigmam())
+sigmap = qt.tensor(qt.qeye(N), qt.sigmap())
+sigmax = qt.tensor(qt.qeye(N), qt.sigmax())
+sigmay = qt.tensor(qt.qeye(N), qt.sigmay())
+sigmaz = qt.tensor(qt.qeye(N), qt.sigmaz())
 
 I = qt.tensor(qt.qeye(N), qt.qeye(2))
 
 # Hamiltonian
 wrot1 = wc
 wrot2 = wq
-H0 = (wc - wrot1) * (a.dag() * a + I / 2) + 0.5 * (wq - wrot2) * sz
-# V = g * (a * sm.dag() + a.dag() * sm)
-V = chi * (a.dag() * a + I / 2) * sz
-# Hd = 0.5 * amp * (a * np.exp(1j * phase) + a.dag() * np.exp(-1j * phase))
-Hd = 0.5 * amp * (a + a.dag())
 
+H0 = (wc - wrot1) * (a.dag() * a + I / 2) + 0.5 * (wq - wrot2) * sigmaz
+
+if HAMILTONIAN == "JC":
+    V = g * (a.dag() + a) * sigmax
+elif HAMILTONIAN == "RWA":
+    V = g * (a * sigmap + a.dag() * sigmam)
+elif HAMILTONIAN == "DISP":
+    V = chi * (a.dag() * a + I / 2) * sigmaz
+else:
+    raise NotImplementedError
+
+# Hd = 0.5 * amp * (a * np.exp(1j * phase) + a.dag() * np.exp(-1j * phase))
+# Hd = 0.5 * amp * (a + a.dag())
 # H = H0 + V + Hd
+
 H = [H0, V, [a, 'A * sin(chi * t)**2'], [a.dag(), 'A * sin(chi * t)**2']]
 
 # Initial state
@@ -185,7 +200,7 @@ print()
 
 print("Fidelity ground state")
 scores_g = np.zeros(Ntraj)
-avg_traj_g = np.zeros(len(tlist), np.complex128)
+avg_traj_g = np.zeros(len(tlist), np.complex256)  # use extended-precision accumulator
 correct = 0
 bar = MyProgressBar()
 bar.start(Ntraj)
@@ -243,12 +258,13 @@ for ii in range(Ntraj):
 bar.finished()
 
 avg_traj_g /= Ntraj
+avg_traj_g = avg_traj_g.astype(np.complex128)  # cast back to double precision
 print("{:d} out of {:d}: {:.1%}".format(correct, Ntraj, correct / Ntraj))
 print()
 
 print("Fidelity excited state")
 scores_e = np.zeros(Ntraj)
-avg_traj_e = np.zeros(len(tlist), np.complex128)
+avg_traj_e = np.zeros(len(tlist), np.complex256)  # use extended-precision accumulator
 correct = 0
 bar = MyProgressBar()
 bar.start(Ntraj)
@@ -305,6 +321,7 @@ for ii in range(Ntraj):
 bar.finished()
 
 avg_traj_e /= Ntraj
+avg_traj_e = avg_traj_e.astype(np.complex128)  # cast back to double precision
 t1 = time.time()
 print("{:d} out of {:d}: {:.1%}".format(correct, Ntraj, correct / Ntraj))
 print()
@@ -358,9 +375,9 @@ for ii in range(Ntraj):
     measurement = result.measurement[0]
     m = measurement[:, 0, 0].real + 1j * measurement[:, 0, 1].real
     score = np.sum(template * m).real
-    ssz[ii] = qt.expect(sz, result.states[0]).real
-    ssx[ii] = qt.expect(sx, result.states[0]).real
-    ssy[ii] = qt.expect(sy, result.states[0]).real
+    ssz[ii] = qt.expect(sigmaz, result.states[0]).real
+    ssx[ii] = qt.expect(sigmax, result.states[0]).real
+    ssy[ii] = qt.expect(sigmay, result.states[0]).real
     if ssz[ii, -1] > 0:
         if score > 0:
             correct += 1
@@ -381,8 +398,13 @@ print("{:d} out of {:d}: {:.1%}".format(correct, Ntraj, correct / Ntraj))
 print()
 
 scriptname = os.path.splitext(os.path.basename(__file__))[0]
-save_filename = "{:s}_{:d}_{:s}_g_e_p_{:d}.npz".format(
-    scriptname, int(time.time()), "SSE" if USE_SSE else "SME", Ntraj)
+save_filename = "{:s}_{:d}_{:s}_{:s}_g_e_p_{:d}.npz".format(
+    scriptname,
+    int(time.time()),
+    HAMILTONIAN,
+    "SSE" if USE_SSE else "SME",
+    Ntraj,
+)
 np.savez(
     save_filename,
     amp=amp,

@@ -39,6 +39,7 @@ class SimulationParameters(object):
     Attributes:
         para (_SimPara): the C structure to be passed to the cvode simulator.
     """
+
     @classmethod
     def from_measurement(cls, wc, chi, Qb, Ql):
         R0 = 50.
@@ -84,7 +85,10 @@ class SimulationParameters(object):
             ])
             return logerr
 
-        x0 = [1. / wc / 1e1 * 1e9, Qb / 1e6, 1. / (wc + chi) * 1e9, 1. / (wc + chi) * 1e9, 1. / (wc - chi) * 1e9, 1. / (wc - chi) * 1e9]
+        x0 = [
+            1. / wc / 1e1 * 1e9, Qb / 1e6, 1. / (wc + chi) * 1e9,
+            1. / (wc + chi) * 1e9, 1. / (wc - chi) * 1e9, 1. / (wc - chi) * 1e9
+        ]
         bounds = (1e-6, np.inf)
         res = least_squares(erf, x0, bounds=bounds)
 
@@ -100,11 +104,51 @@ class SimulationParameters(object):
 
         return res, para_g, para_e
 
+    @classmethod
+    def from_measurement_single(cls, w0, Qb, Ql):
+        R0 = 50.
+
+        def erf(p):
+            Cl, R1, C1, L1 = p
+
+            Cl *= 1e-9
+            R1 *= 1e6
+            C1 *= 1e-9
+            L1 *= 1e-9
+
+            para = cls(Cl=Cl, R1=R1, L1=L1, C1=C1, R0=R0)
+            my_w0, my_Ql = para.calculate_resonance()
+
+            my_Qb = R1 * np.sqrt(C1 / L1)
+
+            logerr = np.array([
+                np.log(np.abs(my_w0 / w0)),
+                np.log(np.abs(my_Ql / Ql)),
+                np.log(np.abs(my_Qb / Qb)),
+            ])
+            return logerr
+
+        x0 = [1. / w0 / 1e1 * 1e9, Qb / 1e6, 1. / w0 * 1e9, 1. / w0 * 1e9]
+        bounds = (1e-6, np.inf)
+        res = least_squares(erf, x0, bounds=bounds)
+
+        Cl, R1, C1, L1 = res.x
+        Cl *= 1e-9
+        R1 *= 1e6
+        C1 *= 1e-9
+        L1 *= 1e-9
+        para = cls(Cl=Cl, R1=R1, L1=L1, C1=C1, R0=R0)
+
+        return res, para
+
     def __init__(
-        self,
-        Cl,
-        R1, L1, C1,
-        R0=50., fs=50e9,
+            self,
+            Cl,
+            R1,
+            L1,
+            C1,
+            R0=50.,
+            fs=50e9,
     ):
         """
         Args:
@@ -122,13 +166,18 @@ class SimulationParameters(object):
         self.Csum1 = self.C1 + self.Cl
         self.R0 = R0
 
-        self.w01_b = np.sqrt(1. / (self.C1 * self.L1))  # rad/s, bare cavity 1 resonance frequency
+        self.w01_b = np.sqrt(
+            1. /
+            (self.C1 * self.L1))  # rad/s, bare cavity 1 resonance frequency
         self.f01_b = self.w01_b / 2. / np.pi  # Hz, bare cavity 1 resonance frequency
-        self.Q1_b = self.R1 * np.sqrt(self.C1 / self.L1)  # bare cavity 1 quality factor
+        self.Q1_b = self.R1 * np.sqrt(
+            self.C1 / self.L1)  # bare cavity 1 quality factor
 
-        self.w01_d = np.sqrt(1. / (self.Csum1 * self.L1))  # rad/s, dressed cavity 1 resonance frequency
+        self.w01_d = np.sqrt(1. / (self.Csum1 * self.L1)
+                             )  # rad/s, dressed cavity 1 resonance frequency
         self.f01_d = self.w01_d / 2. / np.pi  # Hz, dressed cavity 1 resonance frequency
-        self.Q1_d = self.R1 * np.sqrt(self.Csum1 / self.L1)  # dressed cavity 1 quality factor
+        self.Q1_d = self.R1 * np.sqrt(
+            self.Csum1 / self.L1)  # dressed cavity 1 quality factor
 
         self.Nbeats = 1  # nr of windows (periods, beats) to simulate
 
@@ -136,7 +185,8 @@ class SimulationParameters(object):
         self.df = 50e6  # Hz
         self.dw = 2. * np.pi * self.df
         self.df = self.dw / (2. * np.pi)
-        self.ns = int(round(self.fs / self.df))  # nr of samples in one windows (period, beat)
+        self.ns = int(round(
+            self.fs / self.df))  # nr of samples in one windows (period, beat)
         self.dt = 1. / self.fs
         self.T = 1. / self.df
         self.ws = 2. * np.pi * self.fs
@@ -376,7 +426,8 @@ class SimulationParameters(object):
         if len(V.shape) > 1:
             raise ValueError("Array must be 1D.")
         if len(V) != self.Nbeats * self.ns + 1:
-            raise ValueError("Array must have same shape as get_drive_time_arr().")
+            raise ValueError(
+                "Array must have same shape as get_drive_time_arr().")
 
         self.drive_V_arr = V
         self.drive_id = ID_DRIVE_V
@@ -400,7 +451,8 @@ class SimulationParameters(object):
             t = self.get_drive_time_arr()
             Vg = np.zeros_like(t)
             for ii in range(self.nr_drives):
-                Vg += self.A_arr[ii] * np.cos(self.w_arr[ii] * t + self.P_arr[ii])
+                Vg += self.A_arr[ii] * np.cos(self.w_arr[ii] * t +
+                                              self.P_arr[ii])
             return Vg
 
     def set_linear(self):
@@ -483,8 +535,10 @@ class SimulationParameters(object):
             self.add_thermal_noise = True
             self.para.add_thermal_noise = True
             np.random.seed(seed)
-            self.noise0_array = np.sqrt(PSDv0_twosided) * np.sqrt(self.fs) * np.random.randn(self.Nbeats * self.ns + 2)
-            self.noise1_array = np.sqrt(PSDv1_twosided) * np.sqrt(self.fs) * np.random.randn(self.Nbeats * self.ns + 2)
+            self.noise0_array = np.sqrt(PSDv0_twosided) * np.sqrt(
+                self.fs) * np.random.randn(self.Nbeats * self.ns + 2)
+            self.noise1_array = np.sqrt(PSDv1_twosided) * np.sqrt(
+                self.fs) * np.random.randn(self.Nbeats * self.ns + 2)
             self.para.noise0_array = npct.as_ctypes(self.noise0_array)
             self.para.noise1_array = npct.as_ctypes(self.noise1_array)
         else:
@@ -496,9 +550,12 @@ class SimulationParameters(object):
             self.para.noise1_array = c_double_p()
 
     def simulate(self,
-                 init=None, continue_run=False,
-                 rtol=1.49012e-8, atol=1.49012e-8,
-                 rescale=True, print_time=False):
+                 init=None,
+                 continue_run=False,
+                 rtol=1.49012e-8,
+                 atol=1.49012e-8,
+                 rescale=True,
+                 print_time=False):
         """ Run the simulation. Can be time consuming!
 
         Args:
@@ -535,13 +592,19 @@ class SimulationParameters(object):
             (np.ndarray): the solution array, with shape (Nbeats * ns, NEQ).
         """
         if self.drive_id == ID_NOT_SET:
-            raise RuntimeError("No drive initialized! Use one of set_drive_none, set_drive_lockin, set_drive_V, set_drive_dVdt.")
+            raise RuntimeError(
+                "No drive initialized! Use one of set_drive_none, set_drive_lockin, set_drive_V, set_drive_dVdt."
+            )
         if self.add_thermal_noise:
             if len(self.noise1_array) != self.Nbeats * self.ns + 2:
-                raise RuntimeError("Wrong noise-array length! Regenerate or disable noise with set_noise_T.")
+                raise RuntimeError(
+                    "Wrong noise-array length! Regenerate or disable noise with set_noise_T."
+                )
         if self.drive_id == ID_DRIVE_V:
             if len(self.drive_V_arr) != self.Nbeats * self.ns + 1:
-                raise RuntimeError("Wrong drive-array length! Reset drive with set_drive_V or set_drive_dVdt.")
+                raise RuntimeError(
+                    "Wrong drive-array length! Reset drive with set_drive_V or set_drive_dVdt."
+                )
         if init is None:
             if continue_run:
                 init = self.next_init
@@ -552,7 +615,7 @@ class SimulationParameters(object):
                 raise TypeError("init must be a NumPy array!")
             if not init.dtype == np.float64:
                 raise TypeError("init must be of type np.float64!")
-            if not init.shape == (NEQ,):
+            if not init.shape == (NEQ, ):
                 raise TypeError("init must have shape (NEQ,)!")
         t = self.dt * np.arange(self.Nbeats * self.ns + 1)
         out = np.empty((len(t), NEQ))
@@ -584,16 +647,20 @@ class SimulationParameters(object):
         t0 = time.time()
         res = c_lib.integrate_cvode(
             ctypes.byref(self.para),
-            init, t,
-            out, len(t),
-            float(rtol), float(atol),
+            init,
+            t,
+            out,
+            len(t),
+            float(rtol),
+            float(atol),
         )
         t1 = time.time()
         if print_time:
             dt = t1 - t0
             print(format_sec(dt))
         if res:
-            print("*** Some error occurred in CVODE. Return flag: {:d}".format(res))
+            print("*** Some error occurred in CVODE. Return flag: {:d}".format(
+                res))
 
         init[:] = out[-1, :]
 
@@ -738,7 +805,8 @@ class SimulationParameters(object):
         d2 = l1 * (c1 * r1 + cL * (r0 + r1))
         d3 = c1 * cL * l1 * r0 * r1
 
-        return (n0 + n1 * s + n2 * s**2) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
+        return (n0 + n1 * s + n2 * s**2) / (
+            d0 + d1 * s + d2 * s**2 + d3 * s**3)
 
     def tf1(self, f):
         """ Linear response function from the drive voltage V_G to the voltage
@@ -884,7 +952,8 @@ class SimulationParameters(object):
         d2 = l1 * (c1 * r1 + cL * (r0 + r1))
         d3 = c1 * cL * l1 * r0 * r1
 
-        return (n0 + n1 * s + n2 * s**2) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
+        return (n0 + n1 * s + n2 * s**2) / (
+            d0 + d1 * s + d2 * s**2 + d3 * s**3)
 
     def tfn01(self, f):
         """ Linear response function from the noise voltage Vn_0 to the voltage
@@ -1026,7 +1095,8 @@ class _SimPara(ctypes.Structure):
         ('drive_acc', ctypes.c_void_p),  # internal
 
         # Select system
-        ('sys_id', ctypes.c_int),  # ID_LINEAR, ID_DUFFING, ID_JOSEPHSON or ID_JOSEPHSON_BOTH
+        ('sys_id', ctypes.c_int
+         ),  # ID_LINEAR, ID_DUFFING, ID_JOSEPHSON or ID_JOSEPHSON_BOTH
 
         # Duffing: V/L * (1. - duff * V*V)
         ('duff1', c_double),  # V^-2
@@ -1069,11 +1139,11 @@ def _is_regular(n):
         next_regular
         previous_regular
     """
-    while not(n % 2):
+    while not (n % 2):
         n //= 2
-    while not(n % 3):
+    while not (n % 3):
         n //= 3
-    while not(n % 5):
+    while not (n % 5):
         n //= 5
     return n == 1
 

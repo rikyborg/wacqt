@@ -15,8 +15,7 @@ def double_gaussian(x, m, s):
     return 0.5 * (single_gaussian(x, m, s) + single_gaussian(x, -m, s))
 
 
-# filename = "fidelity_g_e_p_8192.npz"
-filename = "fidelity_1561674935_SSE_g_e_p_32768.npz"
+filename = "simulate_1561776699_DISP_SSE_g_e_p_65536.npz"
 
 with np.load(filename) as npzfile:
     amp = npzfile["amp"]
@@ -38,6 +37,10 @@ with np.load(filename) as npzfile:
     ssx = npzfile["ssx"]
     ssy = npzfile["ssy"]
     tlist = npzfile["tlist"]
+    ref_g = npzfile["ref_g"]
+    ref_e = npzfile["ref_e"]
+    avg_traj_g = npzfile["avg_traj_g"]
+    avg_traj_e = npzfile["avg_traj_e"]
 
 print()
 print("*** Ground state ***")
