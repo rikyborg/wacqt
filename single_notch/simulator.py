@@ -52,10 +52,12 @@ class SimulationParameters(object):
             C1_e *= 1e-9
             L1_e *= 1e-9
 
-            para_g = cls(Lg=Lg, R1=R1, L1=L1_g, C1=C1_g, R0=R0, R2=R2, **kwargs)
+            para_g = cls(
+                Lg=Lg, R1=R1, L1=L1_g, C1=C1_g, R0=R0, R2=R2, **kwargs)
             my_w0_g, my_Ql_g = para_g.calculate_resonance()
 
-            para_e = cls(Lg=Lg, R1=R1, L1=L1_e, C1=C1_e, R0=R0, R2=R2, **kwargs)
+            para_e = cls(
+                Lg=Lg, R1=R1, L1=L1_e, C1=C1_e, R0=R0, R2=R2, **kwargs)
             my_w0_e, my_Ql_e = para_e.calculate_resonance()
 
             my_Qb_g = R1 * np.sqrt(C1_g / L1_g)
@@ -64,15 +66,6 @@ class SimulationParameters(object):
             my_wc = 0.5 * (my_w0_g + my_w0_e)
             my_chi = 0.5 * np.abs(my_w0_g - my_w0_e)
 
-            # relerr = np.array([
-            #     (my_wc - wc) / wc,
-            #     (my_chi - chi) / chi,
-            #     (my_Ql_g - Ql) / Ql,
-            #     (my_Ql_e - Ql) / Ql,
-            #     (my_Qb_g - Qb) / Qb,
-            #     (my_Qb_e - Qb) / Qb,
-            # ])
-            # return np.sum(relerr**2)
             logerr = np.array([
                 np.log(np.abs(my_wc / wc)),
                 np.log(np.abs(my_chi / chi)),
@@ -577,7 +570,7 @@ class SimulationParameters(object):
                  rtol=1.49012e-8,
                  atol=1.49012e-8,
                  rescale=True,
-                 print_time=False):  # !!!***
+                 print_time=False):
         """ Run the simulation. Can be time consuming!
 
         Args:
@@ -773,7 +766,7 @@ class SimulationParameters(object):
             f_out = n * df_out
         return f_out, df_out
 
-    def calculate_resonance(self):  # !!!***
+    def calculate_resonance(self):
         """ Calculate resonance frequency and quality factor from the poles of the transfer function.
 
         Returns:
@@ -1198,6 +1191,7 @@ class SimulationParameters(object):
         d3 = c1 * l1 * lG * r1 * (r0 + r2)
 
         return (n0) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
+
     def calculate_V0(self, P0, P1, Vg):
         Rp = self.R0 * self.R2 / (self.R0 + self.R2)
         return Rp / self.Lg * (P1 - P0) + Rp / self.R0 * Vg
