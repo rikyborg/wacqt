@@ -43,6 +43,13 @@ def get_envelopes(sol, para, Vg):
     P0 = sol[:, 0]
     P1 = sol[:, 1]
     V1 = sol[:, 2]
+    if para.add_thermal_noise:
+        Vn0 = para.noise0_array[:-2]
+        Vn2 = para.noise2_array[:-2]
+    else:
+        Vn0 = 0.
+        Vn2 = 0.
+    V0 = para.calculate_V0(P0, P1, Vg, Vn0, Vn2)
 
     Nimps = 31
     Npoints = 1000
@@ -51,24 +58,29 @@ def get_envelopes(sol, para, Vg):
     t_envelope = np.linspace(0., para.Nbeats / para.df, Npoints, endpoint=False)
 
     P0_spectrum = np.fft.rfft(P0) / len(P0)
+    V0_spectrum = np.fft.rfft(V0) / len(V0)
     P1_spectrum = np.fft.rfft(P1) / len(P1)
     V1_spectrum = np.fft.rfft(V1) / len(V1)
 
     P0_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
+    V0_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
     P1_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
     V1_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
 
     P0_envelope_spectrum[karray - para.Nbeats * nc] = P0_spectrum[karray]
+    V0_envelope_spectrum[karray - para.Nbeats * nc] = V0_spectrum[karray]
     P1_envelope_spectrum[karray - para.Nbeats * nc] = P1_spectrum[karray]
     V1_envelope_spectrum[karray - para.Nbeats * nc] = V1_spectrum[karray]
 
     P0_envelope = np.fft.ifft(P0_envelope_spectrum) * Npoints
+    V0_envelope = np.fft.ifft(V0_envelope_spectrum) * Npoints
     P1_envelope = np.fft.ifft(P1_envelope_spectrum) * Npoints
     V1_envelope = np.fft.ifft(V1_envelope_spectrum) * Npoints
 
     return (
         t_envelope,
         P0_envelope,
+        V0_envelope,
         P1_envelope,
         V1_envelope,
     )
@@ -127,17 +139,19 @@ sol_e = para_e.simulate(print_time=True)
 (
     t_envelope,
     P0_g_envelope,
+    V0_g_envelope,
     P1_g_envelope,
     V1_g_envelope,
 ) = get_envelopes(sol_g, para_g, Vg)
 (
     t_envelope,
     P0_e_envelope,
+    V0_e_envelope,
     P1_e_envelope,
     V1_e_envelope,
 ) = get_envelopes(sol_e, para_e, Vg)
-template_g = P0_g_envelope.copy()
-template_e = P0_e_envelope.copy()
+template_g = V0_g_envelope.copy()
+template_e = V0_e_envelope.copy()
 
 
 if False:  # use faster method below
@@ -201,11 +215,12 @@ for ii in range(Nruns):
     (
         t_envelope,
         P0_s_envelope,
+        V0_s_envelope,
         P1_s_envelope,
         V1_s_envelope,
     ) = get_envelopes(sol_s, para_s, Vg)
 
-    signal = P0_s_envelope
+    signal = V0_s_envelope
     decision = np.real(np.sum(np.conj(template_g - template_e) * signal))
     decision_arr[ii] = decision
 

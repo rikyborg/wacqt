@@ -1,0 +1,9 @@
+Why signal not symmetric around zero?
+
+From the templates, construct two orthonormal vectors (something like subtract |g> and |e>-<g|e>), then try again.
+
+Try with pen and paper on simple vectors, on complex numbers, and on complex vectors.
+
+Or is it better to calculate distance rather than projection?
+
+Get threshould from templates! midway between <e-g|e> and <e-g|g> probably.
