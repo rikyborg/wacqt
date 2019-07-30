@@ -7,8 +7,13 @@ file_name = 'fidelity_chi_2e6_kappa_2e5_Nruns_1024.npz'
 with np.load(file_name) as npz:
     state_arr = npz['state_arr']
     decision_arr = npz['decision_arr']
+    dist_g_arr = npz['dist_g_arr']
+    dist_e_arr = npz['dist_e_arr']
     para_g = np.asscalar(npz['para_g'])
     para_e = np.asscalar(npz['para_e'])
+    template_g = npz['template_g']
+    template_e = npz['template_e']
+    threshold = np.asscalar(npz['threshold'])
 
 w_g, Q_g = para_g.calculate_resonance()
 w_e, Q_e = para_e.calculate_resonance()
@@ -17,7 +22,7 @@ chi = 0.5 * (w_g - w_e)
 kappa = 0.5 * (w_g / Q_g + w_e / Q_e)
 
 N = len(state_arr)
-correct = np.sum(state_arr * (decision_arr < 0)) + np.sum(np.logical_not(state_arr) * (decision_arr > 0))
+correct = np.sum(state_arr * (decision_arr > threshold)) + np.sum(np.logical_not(state_arr) * (decision_arr < threshold))
 fidelity = correct / N
 print("Fidelity: {:.1%}".format(fidelity))
 
@@ -29,8 +34,9 @@ sigma_g = np.std(decision_arr[idx_g])
 mu_e = np.mean(decision_arr[idx_e])
 sigma_e = np.std(decision_arr[idx_e])
 
-f_g = 1 - 0.5 * (1 + erf((0 - mu_g) / np.sqrt(2 * sigma_g**2)))
-f_e = 0.5 * (1 + erf((0 - mu_e) / np.sqrt(2 * sigma_e**2)))
+th = 0.5 * (mu_g + mu_e)
+f_g = 0.5 * (1 + erf((th - mu_g) / np.sqrt(2 * sigma_g**2)))
+f_e = 1 - 0.5 * (1 + erf((th - mu_e) / np.sqrt(2 * sigma_e**2)))
 theo_f = 0.5 * (f_g + f_e)
 print("Theoretical: {:.1%}".format(theo_f))
 print("Infidelity: {:.2e}".format(1. - theo_f))

@@ -2,15 +2,12 @@ from __future__ import absolute_import, division, print_function
 
 import time
 
-import matplotlib.pyplot as plt
 import numpy as np
 from scipy.constants import hbar, Boltzmann
 
 import simulator as sim
 
-
 Nruns = 1024
-
 
 _wc = 2. * np.pi * 6e9
 _chi = 2. * np.pi * 2e6
@@ -20,7 +17,8 @@ _Ql = _wc / _kappa
 AMP = 2.263e-6  # V
 save_filename = "fidelity_chi_2e6_kappa_2e5_Nruns_1024.npz"
 
-res, para_g, para_e = sim.SimulationParameters.from_measurement(_wc, _chi, _Qb, _Ql)
+res, para_g, para_e = sim.SimulationParameters.from_measurement(
+    _wc, _chi, _Qb, _Ql)
 
 w_g, Q_g = para_g.calculate_resonance()
 w_e, Q_e = para_e.calculate_resonance()
@@ -39,6 +37,25 @@ para_g.set_df(df)
 para_e.set_df(df)
 
 
+def inprod(f, g):
+    return np.sum(f * np.conj(g))
+
+
+def norm(x):
+    return np.sqrt(np.real(inprod(x, x)))
+
+
+def proj(v, u):
+    if not norm(u):
+        return 0.
+    else:
+        return inprod(v, u) / inprod(u, u) * u
+
+
+def dist(f, g):
+    return norm(f - g)
+
+
 def get_envelopes(sol, para, Vg):
     P0 = sol[:, 0]
     P1 = sol[:, 1]
@@ -47,8 +64,10 @@ def get_envelopes(sol, para, Vg):
     Nimps = 31
     Npoints = 1000
     nc = int(round(fc / df))
-    karray = np.arange((nc - Nimps // 2) * para.Nbeats, (nc + Nimps // 2) * para.Nbeats + 1)
-    t_envelope = np.linspace(0., para.Nbeats / para.df, Npoints, endpoint=False)
+    karray = np.arange((nc - Nimps // 2) * para.Nbeats,
+                       (nc + Nimps // 2) * para.Nbeats + 1)
+    t_envelope = np.linspace(
+        0., para.Nbeats / para.df, Npoints, endpoint=False)
 
     P0_spectrum = np.fft.rfft(P0) / len(P0)
     P1_spectrum = np.fft.rfft(P1) / len(P1)
@@ -90,9 +109,12 @@ def get_init_array(para, N):
     Vn1_fft = np.fft.rfft(Vn1) / ns
     Vn2_fft = np.fft.rfft(Vn2) / ns
 
-    P0_fft = para.tfn0P0(freqs) * Vn0_fft + para.tfn1P0(freqs) * Vn1_fft + para.tfn2P0(freqs) * Vn2_fft
-    P1_fft = para.tfn0P1(freqs) * Vn0_fft + para.tfn1P1(freqs) * Vn1_fft + para.tfn2P1(freqs) * Vn2_fft
-    V1_fft = para.tfn01(freqs) * Vn0_fft + para.tfn11(freqs) * Vn1_fft + para.tfn21(freqs) * Vn2_fft
+    P0_fft = para.tfn0P0(freqs) * Vn0_fft + para.tfn1P0(
+        freqs) * Vn1_fft + para.tfn2P0(freqs) * Vn2_fft
+    P1_fft = para.tfn0P1(freqs) * Vn0_fft + para.tfn1P1(
+        freqs) * Vn1_fft + para.tfn2P1(freqs) * Vn2_fft
+    V1_fft = para.tfn01(freqs) * Vn0_fft + para.tfn11(
+        freqs) * Vn1_fft + para.tfn21(freqs) * Vn2_fft
 
     P0 = np.fft.irfft(P0_fft) * para.ns
     P1 = np.fft.irfft(P1_fft) * para.ns
@@ -138,29 +160,19 @@ sol_e = para_e.simulate(print_time=True)
 ) = get_envelopes(sol_e, para_e, Vg)
 template_g = P0_g_envelope.copy()
 template_e = P0_e_envelope.copy()
+# center_g = np.real(np.sum(np.conj(template_e - template_g) * template_g))
+# center_e = np.real(np.sum(np.conj(template_e - template_g) * template_e))
+# threshold = 0.5 * (center_g + center_e)
+threshold = 0.5 * (norm(template_e)**2 - norm(template_g)**2)
 
-
-if False:  # use faster method below
-    # reach equilibrium and save init
-    print("Finding equilibrium")
-    Nrelax = int(round(2. * np.pi * df / kappa))
-    para_g.set_Nbeats(3 * Nrelax)
-    para_e.set_Nbeats(3 * Nrelax)
-    para_g.set_noise_T(T1=Tph, T0=T0)
-    para_e.set_noise_T(T1=Tph, T0=T0)
-    para_g.set_drive_none()
-    para_e.set_drive_none()
-    para_g.simulate(print_time=True)
-    para_e.simulate(print_time=True)
-    init_g = para_g.next_init.copy()
-    init_e = para_e.next_init.copy()
-else:
-    print("Calculate init")
-    init_arr_g = get_init_array(para_g, Nruns)
-    init_arr_e = get_init_array(para_g, Nruns)
+print("Calculate init")
+init_arr_g = get_init_array(para_g, Nruns)
+init_arr_e = get_init_array(para_g, Nruns)
 
 state_arr = np.zeros(Nruns, dtype=np.bool)
 decision_arr = np.zeros(Nruns, dtype=np.float64)
+dist_g_arr = np.zeros(Nruns, dtype=np.float64)
+dist_e_arr = np.zeros(Nruns, dtype=np.float64)
 
 t00 = time.time()
 for ii in range(Nruns):
@@ -181,23 +193,10 @@ for ii in range(Nruns):
         init_array_s = init_arr_g
         state_arr[ii] = False
 
-    if False:  # use faster method below
-        # readout run
-        print('    equilibrate')
-        para_s.set_Nbeats(Nrelax)
-        para_s.set_noise_T(T1=Tph, T0=T0)
-        para_s.set_drive_none()
-        para_s.simulate(init=init_s)
-        print('    readout')
-        para_s.set_Nbeats(2)
-        para_s.set_noise_T(T1=Tph, T0=T0)
-        para_s.set_drive_V(drive)
-        sol_s = para_s.simulate(continue_run=True)
-    else:
-        para_s.set_Nbeats(2)
-        para_s.set_noise_T(T1=Tph, T0=T0)
-        para_s.set_drive_V(drive)
-        sol_s = para_s.simulate(init=init_array_s[ii, :])
+    para_s.set_Nbeats(2)
+    para_s.set_noise_T(T1=Tph, T0=T0)
+    para_s.set_drive_V(drive)
+    sol_s = para_s.simulate(init=init_array_s[ii, :])
     (
         t_envelope,
         P0_s_envelope,
@@ -206,10 +205,15 @@ for ii in range(Nruns):
     ) = get_envelopes(sol_s, para_s, Vg)
 
     signal = P0_s_envelope
-    decision = np.real(np.sum(np.conj(template_g - template_e) * signal))
+    decision = np.real(np.sum(np.conj(template_e - template_g) * signal))
     decision_arr[ii] = decision
 
-    if (state and (decision < 0)) or (not state and (decision > 0)):
+    dist_g = dist(signal, template_g)
+    dist_e = dist(signal, template_e)
+    dist_g_arr[ii] = dist_g
+    dist_e_arr[ii] = dist_e
+
+    if (state and (decision > threshold)) or (not state and (decision < threshold)):
         print("    correct: {:.3g}".format(decision))
     else:
         print("*** ERROR: {:.3g} ****************".format(decision))
@@ -219,14 +223,16 @@ for ii in range(Nruns):
 t11 = time.time()
 print("Total time: {:s}".format(sim.format_sec(t11 - t00)))
 
-# fig, ax = plt.subplots()
-# ax.hist(decision_arr)
-# fig.show()
 
 np.savez(
     save_filename,
     state_arr=state_arr,
     decision_arr=decision_arr,
+    dist_g_arr=dist_g_arr,
+    dist_e_arr=dist_e_arr,
     para_g=para_g.pickable_copy(),
     para_e=para_e.pickable_copy(),
+    template_g=template_g,
+    template_e=template_e,
+    threshold=threshold,
 )
