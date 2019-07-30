@@ -57,6 +57,7 @@ sol = para.simulate()
 para.set_Nbeats(1)
 freqs = np.fft.rfftfreq(para.ns, para.dt)
 psdP0 = np.zeros_like(freqs)
+psdV0 = np.zeros_like(freqs)
 psdP1 = np.zeros_like(freqs)
 psdV1 = np.zeros_like(freqs)
 
@@ -68,8 +69,14 @@ for ii in range(Navg):
     P0 = sol[-para.ns:, 0]
     P1 = sol[-para.ns:, 1]
     V1 = sol[-para.ns:, 2]
+    V0 = para.calculate_V0(
+        P0, P1, 0.,
+        para.noise0_array[:-2], para.noise2_array[:-2],
+    )
     mf, X = periodogram(P0, para.fs, window='boxcar', nfft=None, detrend=False, return_onesided=True, scaling='density')
     psdP0 += X
+    mf, X = periodogram(V0, para.fs, window='boxcar', nfft=None, detrend=False, return_onesided=True, scaling='density')
+    psdV0 += X
     mf, X = periodogram(P1, para.fs, window='boxcar', nfft=None, detrend=False, return_onesided=True, scaling='density')
     psdP1 += X
     mf, X = periodogram(V1, para.fs, window='boxcar', nfft=None, detrend=False, return_onesided=True, scaling='density')
@@ -78,6 +85,7 @@ t1 = time.time()
 print("Simulation time: {}".format(sim.format_sec(t1 - t0)))
 
 psdP0 /= Navg
+psdV0 /= Navg
 psdP1 /= Navg
 psdV1 /= Navg
 
@@ -85,14 +93,17 @@ sigma0 = 4. * Boltzmann * para.noise_T0 * para.R0
 sigma1 = 4. * Boltzmann * para.noise_T1 * para.R1
 sigma2 = 4. * Boltzmann * para.noise_T2 * para.R2
 theoP0 = sigma0 * np.abs(para.tfn0P0(freqs))**2 + sigma1 * np.abs(para.tfn1P0(freqs))**2 + sigma2 * np.abs(para.tfn2P0(freqs))**2
+theoV0 = sigma0 * np.abs(para.tfn00(freqs))**2 + sigma1 * np.abs(para.tfn10(freqs))**2 + sigma2 * np.abs(para.tfn20(freqs))**2
 theoP1 = sigma0 * np.abs(para.tfn0P1(freqs))**2 + sigma1 * np.abs(para.tfn1P1(freqs))**2 + sigma2 * np.abs(para.tfn2P1(freqs))**2
 theoV1 = sigma0 * np.abs(para.tfn01(freqs))**2 + sigma1 * np.abs(para.tfn11(freqs))**2 + sigma2 * np.abs(para.tfn21(freqs))**2
 
 fig, ax = plt.subplots(tight_layout=True)
 ax.loglog(freqs, psdP0, label='P0', c='tab:blue')
+ax.loglog(freqs, psdV0, label='V0', c='tab:pink')
 ax.loglog(freqs, psdP1, label='P1', c='tab:orange')
 ax.loglog(freqs, psdV1, label='V1', c='tab:green')
 ax.loglog(freqs, theoP0, '--', c='tab:red')
+ax.loglog(freqs, theoV0, '--', c='tab:gray')
 ax.loglog(freqs, theoP1, '--', c='tab:purple')
 ax.loglog(freqs, theoV1, '--', c='tab:brown')
 ax.set_xlabel(r"Frequency [$\mathrm{HZ}$]")

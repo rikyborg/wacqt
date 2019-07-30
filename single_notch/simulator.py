@@ -1192,9 +1192,10 @@ class SimulationParameters(object):
 
         return (n0) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
 
-    def calculate_V0(self, P0, P1, Vg):
+    def calculate_V0(self, P0, P1, Vg, Vn0=0., Vn2=0.):
         Rp = self.R0 * self.R2 / (self.R0 + self.R2)
-        return Rp / self.Lg * (P1 - P0) + Rp / self.R0 * Vg
+        return Rp / self.Lg * (P1 - P0) + Rp / self.R0 * (
+            Vg + Vn0) + Rp / self.R2 * Vn2
 
 
 # Load the C library and set arguments and return types
