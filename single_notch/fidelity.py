@@ -7,15 +7,15 @@ from scipy.constants import hbar, Boltzmann
 
 import simulator as sim
 
-Nruns = 1024
+Nruns = 65536 // 4
 
 _wc = 2. * np.pi * 6e9
 _chi = 2. * np.pi * 2e6
 _Qb = 10e6
-_kappa = _chi / 10
+_kappa = _chi / 5
 _Ql = _wc / _kappa
-AMP = 2.263e-6  # V
-save_filename = "fidelity_chi_2e6_kappa_2e5_Nruns_1024.npz"
+AMP = 1.690e-6  # V
+save_filename = "fidelity_chi_2e6_kappa_4e5_Nruns_16384_4.npz"
 
 res, para_g, para_e = sim.SimulationParameters.from_measurement(
     _wc, _chi, _Qb, _Ql)

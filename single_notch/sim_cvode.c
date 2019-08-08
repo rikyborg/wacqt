@@ -17,7 +17,7 @@
 /* Program constants */
 #define true  1
 #define false 0
-#define NEQ   3              // number of equations
+#define NEQ   5              // number of equations
 
 /*  // Use instead para->stiff_equation
 #define LMM   CV_ADAMS       // nonstiff
@@ -50,10 +50,12 @@ typedef struct SimPara {
 
     /* Circuit */
     realtype R0;  // ohm
-    realtype Lg;  // H
-    realtype R1;  // ohm
+    realtype L0;  // H
+    realtype Mg;  // H
+    realtype Cg;  // F
     realtype L1;  // H
     realtype C1;  // F
+    realtype R1;  // ohm
     realtype R2;  // ohm
 
     /* Drive */
@@ -96,31 +98,51 @@ typedef struct SimPara {
 
 
 static int init_para(SimPara* para) {
-    realtype lG = para->Lg;
-    realtype r1 = para->R1;
-    realtype l1 = para->L1;
-    realtype c1 = para->C1;
-    realtype r0 = para->R0;
-    realtype r2 = para->R2;
+    realtype r0 = para->R0;  // ohm
+    realtype l0 = para->L0;  // H
+    realtype cG = para->Cg;  // F
+    realtype l1 = para->L1;  // H
+    realtype c1 = para->C1;  // F
+    realtype r1 = para->R1;  // ohm
+    realtype r2 = para->R2;  // ohm
+    realtype mG = para->Mg;  // H
 
-    realtype rP = r0 * r2 / (r0 + r2);
-    realtype lP = lG * l1 / (lG + l1);
-
-    para->b[0] = rP / r0;
+    para->b[0] = 1.;
     para->b[1] = 0.;
     para->b[2] = 0.;
+    para->b[3] = 0.;
+    para->b[4] = 0.;
 
-    para->a[0][0] = -rP / lG;
-    para->a[0][1] = rP / lG;
+    para->a[0][0] = -(l1*r0) / (l0*l1 - mG*mG);
+    para->a[0][1] = (mG*r0) / (l0*l1 - mG*mG);
     para->a[0][2] = 0.;
+    para->a[0][3] = (l1*r0) / (l0*l1 - mG*mG);
+    para->a[0][4] = 0.;
 
     para->a[1][0] = 0.;
     para->a[1][1] = 0.;
     para->a[1][2] = 1.;
+    para->a[1][3] = 0.;
+    para->a[1][4] = 0.;
 
-    para->a[2][0] = 1. / (c1 * lG);
-    para->a[2][1] = -1. / (c1 * lP);
-    para->a[2][2] = -1. / (c1 * r1);
+    para->a[2][0] = (l1 + mG) / (c1*(l0*l1 - mG*mG));
+    para->a[2][1] = -(l0 + mG) / (c1*(l0*l1 - mG*mG));
+    para->a[2][2] = -1./(c1*r1);
+    para->a[2][3] = -(l1 + mG) / (c1*(l0*l1 - mG*mG));
+    para->a[2][4] = -1./(c1*r2);
+
+    para->a[3][0] = 0.;
+    para->a[3][1] = 0.;
+    para->a[3][2] = 0.;
+    para->a[3][3] = 0.;
+    para->a[3][4] = 1.;
+
+    para->a[4][0] = (c1*l1 + cG*l1 + cG*mG) / (c1*cG*l0*l1 - c1*cG*mG*mG);
+    para->a[4][1] = -(cG*l0 + c1*mG + cG*mG) / (c1*cG*l0*l1 - c1*cG*mG*mG);
+    para->a[4][2] = -1. / (c1*r1);
+    para->a[4][3] = -(c1*l1 + cG*l1 + cG*mG) / (c1*cG*l0*l1 - c1*cG*mG*mG);
+    para->a[4][4] = -(c1 + cG) / (c1*cG*r2);
+
 
     return(0);
 }

@@ -10,9 +10,9 @@ _wc = 2. * np.pi * 6e9
 _chi = 2. * np.pi * 2e6
 _Qb = 10e6
 # _kappa = 2. * np.pi * 37.5e6 / 1e2
-_kappa = _chi / 10
+_kappa = _chi / 5
 _Ql = _wc / _kappa
-AMP = 2.263e-6  # V
+AMP = 1.690e-6  # V
 
 res, para_g, para_e = sim.SimulationParameters.from_measurement(_wc, _chi, _Qb, _Ql)
 # res, para_g = sim.SimulationParameters.from_measurement_single(_wc - _chi, _Qb, _Ql)

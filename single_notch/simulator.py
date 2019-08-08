@@ -13,7 +13,7 @@ from scipy.optimize import least_squares
 
 ID_NOT_SET = -1
 
-NEQ = 3
+NEQ = 5
 
 ID_LINEAR = 0
 ID_DUFFING = 1
@@ -41,7 +41,7 @@ class SimulationParameters(object):
     """
 
     @classmethod
-    def from_measurement(cls, wc, chi, Qb, Ql, R0=50., R2=50., **kwargs):
+    def from_measurement(cls, wc, chi, Qb, Ql, R0=50., R2=50., **kwargs):  # ***!!!
         def erf(p):
             Lg, R1, C1_g, L1_g, C1_e, L1_e = p
 
@@ -105,14 +105,16 @@ class SimulationParameters(object):
     @classmethod
     def from_measurement_single(cls, w0, Qb, Ql, R0=50., R2=50., **kwargs):
         def erf(p):
-            Lg, R1, C1, L1 = p
+            L0, Mg, Cg, L1, C1, R1 = p
 
-            Lg *= 1e-9
-            R1 *= 1e6
-            C1 *= 1e-9
+            L0 *= 1e-9
+            Mg *= 1e-9
+            Cg *= 1e-9
             L1 *= 1e-9
+            C1 *= 1e-9
+            R1 *= 1e6
 
-            para = cls(Lg=Lg, R1=R1, L1=L1, C1=C1, R0=R0, R2=R2, **kwargs)
+            para = cls(L0=L0, Mg=Mg, Cg=Cg, L1=L1, C1=C1, R1=R1, R0=R0, R2=R2, **kwargs)
             my_w0, my_Ql = para.calculate_resonance()
 
             my_Qb = R1 * np.sqrt(C1 / L1)
@@ -124,59 +126,57 @@ class SimulationParameters(object):
             ])
             return logerr
 
-        x0 = [1. / w0 / 1e1 * 1e9, Qb / 1e6, 1. / w0 * 1e9, 1. / w0 * 1e9]
+        x0 = [
+            1. / w0 / 1e3 * 1e9, 1. / w0 / 1e1 * 1e9, 1. / w0 / 1e1 * 1e9,
+            1. / w0 * 1e9, 1. / w0 * 1e9, Qb / 1e6,
+        ]
+
         bounds = (1e-6, np.inf)
         res = least_squares(erf, x0, bounds=bounds)
 
-        Lg, R1, C1, L1 = res.x
-        Lg *= 1e-9
-        R1 *= 1e6
-        C1 *= 1e-9
+        L0, Mg, Cg, L1, C1, R1 = res.x
+        L0 *= 1e-9
+        Mg *= 1e-9
+        Cg *= 1e-9
         L1 *= 1e-9
-        para = cls(Lg=Lg, R1=R1, L1=L1, C1=C1, R0=R0, R2=R2, **kwargs)
+        C1 *= 1e-9
+        R1 *= 1e6
+        para = cls(L0=L0, Mg=Mg, Cg=Cg, L1=L1, C1=C1, R1=R1, R0=R0, R2=R2, **kwargs)
 
         return res, para
 
     def __init__(
             self,
-            Lg,
-            R1,
+            L0,
+            Mg,
+            Cg,
             L1,
             C1,
+            R1,
             R0=50.,
             R2=50.,
             fs=50e9,
     ):
         """
         Args:
-            Lg (float): coupling inductance in henry (H)
-            R1 (float): cavity resistance in ohm (Omega)
+            L0 (float): trasmission-line inductance in henry (H)
+            Mg (float): mutual (coupling) inductance in henry (H)
+            Cg (float): coupling capacitance in farad (F)
             L1 (float): cavity inductance in henry (H)
             C1 (float): cavity capacitance in farad (F)
+            R1 (float): cavity resistance in ohm (Omega)
             R0 (float, optional): input transmission line impedance in ohm (Omega)
             R2 (float, optional): output transmission line impedance in ohm (Omega)
             fs (float, optional): sampling frequency in hertz (Hz)
         """
-        self.Lg = Lg
-        self.C1 = C1
+        self.L0 = L0
+        self.Mg = Mg
+        self.Cg = Cg
         self.L1 = L1
+        self.C1 = C1
         self.R1 = R1
-        # self.Csum1 = self.C1 + self.Cl
         self.R0 = R0
         self.R2 = R2
-
-        # self.w01_b = np.sqrt(
-        #     1. /
-        #     (self.C1 * self.L1))  # rad/s, bare cavity 1 resonance frequency
-        # self.f01_b = self.w01_b / 2. / np.pi  # Hz, bare cavity 1 resonance frequency
-        # self.Q1_b = self.R1 * np.sqrt(
-        #     self.C1 / self.L1)  # bare cavity 1 quality factor
-
-        # self.w01_d = np.sqrt(1. / (self.Csum1 * self.L1)
-        #                      )  # rad/s, dressed cavity 1 resonance frequency
-        # self.f01_d = self.w01_d / 2. / np.pi  # Hz, dressed cavity 1 resonance frequency
-        # self.Q1_d = self.R1 * np.sqrt(
-        #     self.Csum1 / self.L1)  # dressed cavity 1 quality factor
 
         self.Nbeats = 1  # nr of windows (periods, beats) to simulate
 
@@ -216,13 +216,15 @@ class SimulationParameters(object):
         # Populate C structure
         self.para = _SimPara()
 
-        self.para.stiff_equation = False  # !!!***
+        self.para.stiff_equation = False  # ***!!!
 
-        self.para.Lg = float(self.Lg)
-        self.para.R1 = float(self.R1)
+        self.para.R0 = float(self.R0)
+        self.para.L0 = float(self.L0)
+        self.para.Mg = float(self.Mg)
+        self.para.Cg = float(self.Cg)
         self.para.L1 = float(self.L1)
         self.para.C1 = float(self.C1)
-        self.para.R0 = float(self.R0)
+        self.para.R1 = float(self.R1)
         self.para.R2 = float(self.R2)
 
         self.para.drive_id = int(self.drive_id)
@@ -645,7 +647,11 @@ class SimulationParameters(object):
             init[0] /= __PHI__
             init[1] /= __PHI__
             init[2] /= __PHI__ * __F__
-            self.para.Lg /= __T__
+            init[3] /= __PHI__
+            init[4] /= __PHI__ * __F__
+            self.para.L0 /= __T__
+            self.para.Mg /= __T__
+            self.para.Cg /= __T__
             self.para.L1 /= __T__
             self.para.C1 /= __T__
             if self.drive_id == ID_LOCKIN:
@@ -686,10 +692,16 @@ class SimulationParameters(object):
             init[0] *= __PHI__
             init[1] *= __PHI__
             init[2] *= __PHI__ * __F__
+            init[3] *= __PHI__
+            init[4] *= __PHI__ * __F__
             out[:, 0] *= __PHI__
             out[:, 1] *= __PHI__
             out[:, 2] *= __PHI__ * __F__
-            self.para.Lg *= __T__
+            out[:, 3] *= __PHI__
+            out[:, 4] *= __PHI__ * __F__
+            self.para.L0 *= __T__
+            self.para.Mg *= __T__
+            self.para.Cg *= __T__
             self.para.L1 *= __T__
             self.para.C1 *= __T__
             if self.drive_id == ID_LOCKIN:
@@ -766,7 +778,7 @@ class SimulationParameters(object):
             f_out = n * df_out
         return f_out, df_out
 
-    def calculate_resonance(self):
+    def calculate_resonance(self):  # ***!!!
         """ Calculate resonance frequency and quality factor from the poles of the transfer function.
 
         Returns:
@@ -784,22 +796,25 @@ class SimulationParameters(object):
 
     def get_tf_den_coeff(self):
         r0 = self.R0
+        l0 = self.L0
+        mG = self.Mg
+        cG = self.Cg
+        l1 = self.L1
+        c1 = self.C1
         r1 = self.R1
         r2 = self.R2
-        c1 = self.C1
-        lG = self.Lg
-        l1 = self.L1
 
-        d0 = r0 * r1 * r2
-        d1 = l1 * r0 * r1 + l1 * (r0 + r1) * r2 + lG * r1 * (r0 + r2)
-        d2 = l1 * (c1 * r0 * r1 * r2 + lG * (r0 + r2))
-        d3 = c1 * l1 * lG * r1 * (r0 + r2)
+        d0 = r0 * r1 + r1 * r2
+        d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG * (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG * (r1 + r2))
+        d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
 
-        return [d3, d2, d1, d0]
+        return [d4, d3, d2, d1, d0]
 
     def tf0(self, f):
         """ Linear response function from the drive voltage V_G to the voltage
-        at the input port V_0.
+        in the transmission line V_0.
 
         Args:
             f (float or np.ndarray): frequency in hertz (Hz)
@@ -809,23 +824,27 @@ class SimulationParameters(object):
         """
         s = 1j * 2. * np.pi * f
         r0 = self.R0
+        l0 = self.L0
+        mG = self.Mg
+        cG = self.Cg
+        l1 = self.L1
+        c1 = self.C1
         r1 = self.R1
         r2 = self.R2
-        c1 = self.C1
-        lG = self.Lg
-        l1 = self.L1
 
-        n1 = (l1 * r1 + lG * r1) * r2
-        n2 = l1 * lG * r2
-        n3 = c1 * l1 * lG * r1 * r2
+        n0 = r1 * r2
+        n1 = l0 * r1 + l1 * r2
+        n2 = l0 * l1 - mG**2 + (c1 * l1 + cG * (l0 + l1 + 2 * mG)) * r1 * r2
+        n3 = (l0 * l1 - mG**2) * (c1 * r1 + cG * (r1 + r2))
+        n4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
 
-        d0 = r0 * r1 * r2
-        d1 = l1 * r0 * r1 + l1 * (r0 + r1) * r2 + lG * r1 * (r0 + r2)
-        d2 = l1 * (c1 * r0 * r1 * r2 + lG * (r0 + r2))
-        d3 = c1 * l1 * lG * r1 * (r0 + r2)
+        d0 = r0 * r1 + r1 * r2
+        d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG * (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG * (r1 + r2))
+        d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
 
-        return (n1 * s + n2 * s**2 + n3 * s**3) / (
-            d0 + d1 * s + d2 * s**2 + d3 * s**3)
+        return (n0 + n1 * s + n2 * s**2 + n3 * s**3 + n4 * s**4) / (d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
 
     def tf1(self, f):
         """ Linear response function from the drive voltage V_G to the voltage
@@ -839,22 +858,58 @@ class SimulationParameters(object):
         """
         s = 1j * 2. * np.pi * f
         r0 = self.R0
+        l0 = self.L0
+        mG = self.Mg
+        cG = self.Cg
+        l1 = self.L1
+        c1 = self.C1
         r1 = self.R1
         r2 = self.R2
-        c1 = self.C1
-        lG = self.Lg
+
+        n1 = mG * r1
+        n2 = cG * (l1 + mG) * r1 * r2
+
+        d0 = r0 * r1 + r1 * r2
+        d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG * (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG * (r1 + r2))
+        d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
+
+        return (n1 * s + n2 * s**2) / (d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
+
+    def tf2(self, f):
+        """ Linear response function from the drive voltage V_G to the voltage
+        on the output port V_2.
+
+        Args:
+            f (float or np.ndarray): frequency in hertz (Hz)
+
+        Returns:
+            (float or np.ndarray)
+        """
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        l0 = self.L0
+        mG = self.Mg
+        cG = self.Cg
         l1 = self.L1
+        c1 = self.C1
+        r1 = self.R1
+        r2 = self.R2
 
-        n1 = l1 * r1 * r2
+        n0 = r1 * r2
+        n1 = l1 * r2
+        n2 = (c1 * l1 + cG * (l1 + mG)) * r1 * r2
 
-        d0 = r0 * r1 * r2
-        d1 = l1 * r0 * r1 + l1 * (r0 + r1) * r2 + lG * r1 * (r0 + r2)
-        d2 = l1 * (c1 * r0 * r1 * r2 + lG * (r0 + r2))
-        d3 = c1 * l1 * lG * r1 * (r0 + r2)
+        d0 = r0 * r1 + r1 * r2
+        d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG * (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG * (r1 + r2))
+        d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
 
-        return (n1 * s) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
+        return (n0 + n1 * s + n2 * s**2) / (d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
 
-    def tfn11(self, f):
+    def tfn11(self, f):  # ***!!!
         """ Linear response function from the noise voltage Vn_1 to the voltage
         on the oscillator V_1.
 
@@ -882,7 +937,7 @@ class SimulationParameters(object):
 
         return (n1 * s + n2 * s**2) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
 
-    def tfn1P1(self, f):
+    def tfn1P1(self, f):  # ***!!!
         """ Linear response function from the noise voltage Vn_1 to the flux
         on the oscillator P_1.
 
@@ -910,7 +965,7 @@ class SimulationParameters(object):
 
         return (n0 + n1 * s) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
 
-    def tfn10(self, f):
+    def tfn10(self, f):  # ***!!!
         """ Linear response function from the noise voltage Vn_1 to the voltage
         at the input port V_0.
 
@@ -937,7 +992,7 @@ class SimulationParameters(object):
 
         return (n1 * s) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
 
-    def tfn1P0(self, f):
+    def tfn1P0(self, f):  # ***!!!
         """ Linear response function from the noise voltage Vn_1 to the flux
         at the input port P_0.
 
@@ -964,7 +1019,7 @@ class SimulationParameters(object):
 
         return (n0) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
 
-    def tfn00(self, f):
+    def tfn00(self, f):  # ***!!!
         """ Linear response function from the noise voltage Vn_0 to the voltage
         at the input port V_0.
 
@@ -994,7 +1049,7 @@ class SimulationParameters(object):
         return (n1 * s + n2 * s**2 + n3 * s**3) / (
             d0 + d1 * s + d2 * s**2 + d3 * s**3)
 
-    def tfn0P0(self, f):
+    def tfn0P0(self, f):  # ***!!!
         """ Linear response function from the noise voltage Vn_0 to the flux
         at the input port P_0.
 
@@ -1024,7 +1079,7 @@ class SimulationParameters(object):
         return (n0 + n1 * s + n2 * s**2) / (
             d0 + d1 * s + d2 * s**2 + d3 * s**3)
 
-    def tfn01(self, f):
+    def tfn01(self, f):  # ***!!!
         """ Linear response function from the noise voltage Vn_0 to the voltage
         on the oscillator V_1.
 
@@ -1051,7 +1106,7 @@ class SimulationParameters(object):
 
         return (n1 * s) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
 
-    def tfn0P1(self, f):
+    def tfn0P1(self, f):  # ***!!!
         """ Linear response function from the noise voltage Vn_0 to the flux
         on the oscillator P_1.
 
@@ -1078,7 +1133,7 @@ class SimulationParameters(object):
 
         return (n0) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
 
-    def tfn20(self, f):
+    def tfn20(self, f):  # ***!!!
         """ Linear response function from the noise voltage Vn_2 to the voltage
         at the input port V_0.
 
@@ -1108,7 +1163,7 @@ class SimulationParameters(object):
         return (n1 * s + n2 * s**2 + n3 * s**3) / (
             d0 + d1 * s + d2 * s**2 + d3 * s**3)
 
-    def tfn2P0(self, f):
+    def tfn2P0(self, f):  # ***!!!
         """ Linear response function from the noise voltage Vn_2 to the flux
         at the input port P_0.
 
@@ -1138,7 +1193,7 @@ class SimulationParameters(object):
         return (n0 + n1 * s + n2 * s**2) / (
             d0 + d1 * s + d2 * s**2 + d3 * s**3)
 
-    def tfn21(self, f):
+    def tfn21(self, f):  # ***!!!
         """ Linear response function from the noise voltage Vn_2 to the voltage
         on the oscillator V_1.
 
@@ -1165,7 +1220,7 @@ class SimulationParameters(object):
 
         return (n1 * s) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
 
-    def tfn2P1(self, f):
+    def tfn2P1(self, f):  # ***!!!
         """ Linear response function from the noise voltage Vn_2 to the flux
         on the oscillator P_1.
 
@@ -1191,11 +1246,6 @@ class SimulationParameters(object):
         d3 = c1 * l1 * lG * r1 * (r0 + r2)
 
         return (n0) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
-
-    def calculate_V0(self, P0, P1, Vg, Vn0=0., Vn2=0.):
-        Rp = self.R0 * self.R2 / (self.R0 + self.R2)
-        return Rp / self.Lg * (P1 - P0) + Rp / self.R0 * (
-            Vg + Vn0) + Rp / self.R2 * Vn2
 
 
 # Load the C library and set arguments and return types
@@ -1267,10 +1317,12 @@ class _SimPara(ctypes.Structure):
 
         # Circuit
         ('R0', c_double),  # ohm
-        ('Lg', c_double),  # H
-        ('R1', c_double),  # ohm
+        ('L0', c_double),  # H
+        ('Mg', c_double),  # H
+        ('Cg', c_double),  # F
         ('L1', c_double),  # H
         ('C1', c_double),  # F
+        ('R1', c_double),  # ohm
         ('R2', c_double),  # ohm
 
         # Drive
