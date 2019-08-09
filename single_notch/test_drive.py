@@ -8,15 +8,15 @@ import simulator as sim
 
 _wc = 2. * np.pi * 6e9
 _chi = 2. * np.pi * 2e6
-_Qb = 10e6
+_Qb = 1e6
 # _kappa = 2. * np.pi * 37.5e6 / 1e2
-_kappa = _chi / 5
+_kappa = _chi / 10.
 _Ql = _wc / _kappa
-AMP = 1.690e-6  # V
+AMP = 9.339e-7  # V
 
-res, para_g, para_e = sim.SimulationParameters.from_measurement(_wc, _chi, _Qb, _Ql)
-# res, para_g = sim.SimulationParameters.from_measurement_single(_wc - _chi, _Qb, _Ql)
-# res, para_e = sim.SimulationParameters.from_measurement_single(_wc + _chi, _Qb, _Ql)
+# res, para_g, para_e = sim.SimulationParameters.from_measurement(_wc, _chi, _Qb, _Ql)
+res, para_g = sim.SimulationParameters.from_measurement_single(_wc - _chi, _Qb, _Ql)
+res, para_e = sim.SimulationParameters.from_measurement_single(_wc + _chi, _Qb, _Ql)
 
 w_g, Q_g = para_g.calculate_resonance()
 w_e, Q_e = para_e.calculate_resonance()
@@ -66,15 +66,15 @@ para_e.set_drive_V(drive)
 Vg = drive[:-1]
 
 sol_g = para_g.simulate(print_time=True)  # , continue_run=True)
-P0_g = sol_g[:, 0]
+I0_g = sol_g[:, 0]
 P1_g = sol_g[:, 1]
 V1_g = sol_g[:, 2]
-V0_g = para_g.calculate_V0(P0_g, P1_g, Vg)
+V2_g = sol_g[:, 3]
 sol_e = para_e.simulate(print_time=True)  # , continue_run=True)
-P0_e = sol_e[:, 0]
+I0_e = sol_e[:, 0]
 P1_e = sol_e[:, 1]
 V1_e = sol_e[:, 2]
-V0_e = para_e.calculate_V0(P0_e, P1_e, Vg)
+V2_e = sol_e[:, 3]
 
 Nimps = 31
 Npoints = 1000
@@ -85,36 +85,44 @@ t_envelope = np.linspace(
     0., para_g.Nbeats / para_g.df, Npoints, endpoint=False)
 
 Vg_spectrum = np.fft.rfft(Vg) / len(Vg)
-V0_g_spectrum = np.fft.rfft(V0_g) / len(V0_g)
+I0_g_spectrum = np.fft.rfft(I0_g) / len(I0_g)
 P1_g_spectrum = np.fft.rfft(P1_g) / len(P1_g)
 V1_g_spectrum = np.fft.rfft(V1_g) / len(V1_g)
-V0_e_spectrum = np.fft.rfft(V0_e) / len(V0_e)
+V2_g_spectrum = np.fft.rfft(V2_g) / len(V2_g)
+I0_e_spectrum = np.fft.rfft(I0_e) / len(I0_e)
 P1_e_spectrum = np.fft.rfft(P1_e) / len(P1_e)
 V1_e_spectrum = np.fft.rfft(V1_e) / len(V1_e)
+V2_e_spectrum = np.fft.rfft(V2_e) / len(V2_e)
 
 Vg_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
-V0_g_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
+I0_g_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
 P1_g_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
 V1_g_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
-V0_e_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
+V2_g_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
+I0_e_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
 P1_e_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
 V1_e_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
+V2_e_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
 
 Vg_envelope_spectrum[karray - para_g.Nbeats * nc] = Vg_spectrum[karray]
-V0_g_envelope_spectrum[karray - para_g.Nbeats * nc] = V0_g_spectrum[karray]
+I0_g_envelope_spectrum[karray - para_g.Nbeats * nc] = I0_g_spectrum[karray]
 P1_g_envelope_spectrum[karray - para_g.Nbeats * nc] = P1_g_spectrum[karray]
 V1_g_envelope_spectrum[karray - para_g.Nbeats * nc] = V1_g_spectrum[karray]
-V0_e_envelope_spectrum[karray - para_e.Nbeats * nc] = V0_e_spectrum[karray]
+V2_g_envelope_spectrum[karray - para_g.Nbeats * nc] = V2_g_spectrum[karray]
+I0_e_envelope_spectrum[karray - para_e.Nbeats * nc] = I0_e_spectrum[karray]
 P1_e_envelope_spectrum[karray - para_e.Nbeats * nc] = P1_e_spectrum[karray]
 V1_e_envelope_spectrum[karray - para_e.Nbeats * nc] = V1_e_spectrum[karray]
+V2_e_envelope_spectrum[karray - para_e.Nbeats * nc] = V2_e_spectrum[karray]
 
 Vg_envelope = np.fft.ifft(Vg_envelope_spectrum) * Npoints
-V0_g_envelope = np.fft.ifft(V0_g_envelope_spectrum) * Npoints
+I0_g_envelope = np.fft.ifft(I0_g_envelope_spectrum) * Npoints
 P1_g_envelope = np.fft.ifft(P1_g_envelope_spectrum) * Npoints
 V1_g_envelope = np.fft.ifft(V1_g_envelope_spectrum) * Npoints
-V0_e_envelope = np.fft.ifft(V0_e_envelope_spectrum) * Npoints
+V2_g_envelope = np.fft.ifft(V2_g_envelope_spectrum) * Npoints
+I0_e_envelope = np.fft.ifft(I0_e_envelope_spectrum) * Npoints
 P1_e_envelope = np.fft.ifft(P1_e_envelope_spectrum) * Npoints
 V1_e_envelope = np.fft.ifft(V1_e_envelope_spectrum) * Npoints
+V2_e_envelope = np.fft.ifft(V2_e_envelope_spectrum) * Npoints
 
 nr_ph_g = 0.5 * 2. * np.abs(P1_g_envelope)**2 / para_g.L1 / (hbar * w_g)
 nr_ph_e = 0.5 * 2. * np.abs(P1_e_envelope)**2 / para_e.L1 / (hbar * w_e)
@@ -130,8 +138,8 @@ fig1, ax1 = plt.subplots(3, 1, sharex=True, tight_layout=True)
 ax11, ax12, ax13 = ax1
 
 ax11.plot(1e6 * t_envelope, 1e6 * 2 * np.abs(Vg_envelope))
-ax12.plot(1e6 * t_envelope, 1e6 * 2 * np.abs(V0_g_envelope))
-ax12.plot(1e6 * t_envelope, 1e6 * 2 * np.abs(V0_e_envelope))
+ax12.plot(1e6 * t_envelope, 1e6 * 2 * np.abs(V2_g_envelope))
+ax12.plot(1e6 * t_envelope, 1e6 * 2 * np.abs(V2_e_envelope))
 # ax13.axvspan(1e6 * t_envelope[Npoints // 2], 1e6 * t_envelope[3 * Npoints // 4], color='tab:gray', alpha=0.5)
 ax13.axvline(1e6 * t_envelope[Npoints // 2], ls='--', color='tab:gray')
 ax13.plot(1e6 * t_envelope, nr_ph_g)
@@ -145,8 +153,8 @@ fig2, ax2 = plt.subplots(3, 1, sharex=True, tight_layout=True)
 ax21, ax22, ax23 = ax2
 
 ax21.plot(1e6 * t_envelope, np.angle(Vg_envelope))
-ax22.plot(1e6 * t_envelope, np.angle(V0_g_envelope))
-ax22.plot(1e6 * t_envelope, np.angle(V0_e_envelope))
+ax22.plot(1e6 * t_envelope, np.angle(V2_g_envelope))
+ax22.plot(1e6 * t_envelope, np.angle(V2_e_envelope))
 ax23.axvline(1e6 * t_envelope[Npoints // 2], ls='--', color='tab:gray')
 ax23.plot(1e6 * t_envelope, np.angle(V1_g_envelope))
 ax23.plot(1e6 * t_envelope, np.angle(V1_e_envelope))

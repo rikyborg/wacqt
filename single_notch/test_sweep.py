@@ -41,9 +41,11 @@ fake_PHI0 = PHI0 * 20.  # junctions in series
 # para.set_josephson(PHI0=fake_PHI0)
 
 actual_f_array = np.zeros_like(f_array)
-# respV0_array = np.zeros_like(f_array, dtype=np.complex128)
+respI0_array = np.zeros_like(f_array, dtype=np.complex128)
+respP1_array = np.zeros_like(f_array, dtype=np.complex128)
 respV1_array = np.zeros_like(f_array, dtype=np.complex128)
 respV2_array = np.zeros_like(f_array, dtype=np.complex128)
+respV0_array = np.zeros_like(f_array, dtype=np.complex128)
 
 # Run first time to get initial condition
 fd_, df_ = para.tune(f_array[0], df, priority='f')
@@ -63,44 +65,47 @@ for ii, fd in enumerate(f_array):
     # para.set_noise_T(300.)
     sol = para.simulate(continue_run=True)
 
-    P0 = sol[-para.ns:, 0]
+    I0 = sol[-para.ns:, 0]
     P1 = sol[-para.ns:, 1]
     V1 = sol[-para.ns:, 2]
-    P2 = sol[-para.ns:, 3]
-    V2 = sol[-para.ns:, 4]
+    V2 = sol[-para.ns:, 3]
     Vg = para.get_drive_V()[-para.ns - 1:-1]
-    # V0 = para.calculate_V0(P0, P1, Vg)
+    V0 = para.calculate_V0(I0, Vg)
 
-    # V0_fft = np.fft.rfft(V0) / para.ns
+    I0_fft = np.fft.rfft(I0) / para.ns
+    P1_fft = np.fft.rfft(P1) / para.ns
     V1_fft = np.fft.rfft(V1) / para.ns
     V2_fft = np.fft.rfft(V2) / para.ns
+    V0_fft = np.fft.rfft(V0) / para.ns
     actual_f_array[ii] = fd_
-    # respV0_array[ii] = V0_fft[nd_]
+    respI0_array[ii] = I0_fft[nd_]
+    respP1_array[ii] = P1_fft[nd_]
     respV1_array[ii] = V1_fft[nd_]
     respV2_array[ii] = V2_fft[nd_]
+    respV0_array[ii] = V0_fft[nd_]
 t_end = time.time()
 t_tot = t_end - t_start
 print("Total run took {:s}.".format(sim.format_sec(t_tot)))
 
-# respV0_array *= 2. / (AMP * np.exp(1j * PHASE))
+respV0_array *= 2. / (AMP * np.exp(1j * PHASE))
 respV1_array *= 2. / (AMP * np.exp(1j * PHASE))
 respV2_array *= 2. / (AMP * np.exp(1j * PHASE))
 
-# G0 = para.tf0(f_array)
+G0 = para.tf0(f_array)
 G1 = para.tf1(f_array)
 G2 = para.tf2(f_array)
 
 
-fig, ax = plt.subplots(2, 2, sharex=True, tight_layout=True)
+fig, ax = plt.subplots(2, 3, sharex=True, tight_layout=True)
 ax1, ax2 = ax
-ax12, ax13 = ax1
-ax22, ax23 = ax2
+ax11, ax12, ax13 = ax1
+ax21, ax22, ax23 = ax2
 
-# ax11.plot(1e-9 * actual_f_array, 20. * np.log10(np.abs(respV0_array)), '.', c='tab:blue')
-# ax11.plot(1e-9 * f_array, 20. * np.log10(np.abs(G0)), '--', c='tab:green')
-# ax21.plot(1e-9 * actual_f_array, np.angle(respV0_array), '.', c='tab:orange')
-# ax21.plot(1e-9 * f_array, np.angle(G0), '--', c='tab:red')
-# ax11.set_title('Transmission line')
+ax11.plot(1e-9 * actual_f_array, 20. * np.log10(np.abs(respV0_array)), '.', c='tab:blue')
+ax11.plot(1e-9 * f_array, 20. * np.log10(np.abs(G0)), '--', c='tab:green')
+ax21.plot(1e-9 * actual_f_array, np.angle(respV0_array), '.', c='tab:orange')
+ax21.plot(1e-9 * f_array, np.angle(G0), '--', c='tab:red')
+ax11.set_title('Transmission line')
 
 ax12.plot(1e-9 * actual_f_array, 20. * np.log10(np.abs(respV1_array)), '.', c='tab:blue')
 ax12.plot(1e-9 * f_array, 20. * np.log10(np.abs(G1)), '--', c='tab:green')
