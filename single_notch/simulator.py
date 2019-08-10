@@ -47,28 +47,50 @@ class SimulationParameters(object):
     """
 
     @classmethod
-    def from_measurement(cls, wc, chi, Qb, Ql, R0=50., R2=50., **kwargs):  # ***!!!
+    def from_measurement(cls, wc, chi, Qb, Ql, R0=50., R2=50.,
+                         **kwargs):  # ***!!!
         def erf(p):
-            L0, Mg, Cg, L1_g, C1_g, L1_e, C1_e, R1_g, R1_e = p
+            # L0, Mg, Cg, L1_g, C1_g, L1_e, C1_e, R1 = p
+            L0, k, Cg, L1_g, C1_g, L1_e, C1_e, R1 = p
+            Mg_g = k * np.sqrt(L0 * L1_g)
+            Mg_e = k * np.sqrt(L0 * L1_e)
 
             L0 *= 1e-9
-            Mg *= 1e-9
+            Mg_g *= 1e-9
+            Mg_e *= 1e-9
             Cg *= 1e-9
             L1_g *= 1e-9
             C1_g *= 1e-9
             L1_e *= 1e-9
             C1_e *= 1e-9
-            R1_g *= 1e6
-            R1_e *= 1e6
+            R1 *= 1e6
 
-            para_g = cls(L0=L0, Mg=Mg, Cg=Cg, L1=L1_g, C1=C1_g, R1=R1_g, R0=R0, R2=R2, **kwargs)
+            para_g = cls(
+                L0=L0,
+                Mg=Mg_g,
+                Cg=Cg,
+                L1=L1_g,
+                C1=C1_g,
+                R1=R1,
+                R0=R0,
+                R2=R2,
+                **kwargs)
             my_w0_g, my_Ql_g = para_g.calculate_resonance(verbose=False)
 
-            para_e = cls(L0=L0, Mg=Mg, Cg=Cg, L1=L1_e, C1=C1_e, R1=R1_e, R0=R0, R2=R2, **kwargs)
+            para_e = cls(
+                L0=L0,
+                Mg=Mg_e,
+                Cg=Cg,
+                L1=L1_e,
+                C1=C1_e,
+                R1=R1,
+                R0=R0,
+                R2=R2,
+                **kwargs)
             my_w0_e, my_Ql_e = para_e.calculate_resonance(verbose=False)
 
-            my_Qb_g = R1_g * np.sqrt(C1_g / L1_g)
-            my_Qb_e = R1_e * np.sqrt(C1_e / L1_e)
+            my_Qb_g = R1 * np.sqrt(C1_g / L1_g)
+            my_Qb_e = R1 * np.sqrt(C1_e / L1_e)
 
             my_wc = 0.5 * (my_w0_g + my_w0_e)
             my_chi = 0.5 * np.abs(my_w0_g - my_w0_e)
@@ -90,58 +112,89 @@ class SimulationParameters(object):
         # guess initial parameters from single fit
         _, para_g = cls.from_measurement_single(wc - chi, Qb, Ql, **kwargs)
         _, para_e = cls.from_measurement_single(wc + chi, Qb, Ql, **kwargs)
+        k_g = para_g.Mg / np.sqrt(para_g.L0 * para_g.L1)
+        k_e = para_e.Mg / np.sqrt(para_e.L0 * para_e.L1)
+        k = 0.5 * (np.abs(k_g) + np.abs(k_e))
+        if k_g < 0. and k_e < 0.:
+            k = -k
         x0 = [
             1e9 * 0.5 * (para_g.L0 + para_e.L0),
-            1e9 * 0.5 * (para_g.Mg + para_e.Mg),
-            1e9 *  0.5 * (para_g.Cg + para_e.Cg),
+            # 1e9 * 0.5 * (para_g.Mg + para_e.Mg),
+            k,
+            1e9 * 0.5 * (para_g.Cg + para_e.Cg),
             1e9 * para_g.L1,
             1e9 * para_g.C1,
             1e9 * para_e.L1,
             1e9 * para_e.C1,
-            1e-6 * para_g.R1,
-            1e-6 * para_e.R1,
+            1e-6 * 0.5 * (para_g.R1 + para_e.R1),
         ]
-        # bounds = (1e-6, np.inf)
-        # res = least_squares(erf, x0, bounds=bounds)
         bounds = (
-            (1e-6, None),
-            (None, None),
-            (1e-6, None),
-            (1e-6, None),
-            (1e-6, None),
-            (1e-6, None),
-            (1e-6, None),
-            (1e-6, None),
-            (1e-6, None),
+            [1e-6, -1., 1e-6, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6],
+            [np.inf, 1., np.inf, np.inf, np.inf, np.inf, np.inf, np.inf],
         )
-        constraints = (
-            {'type': 'ineq', 'fun': lambda x:  x[0] * x[3] - x[1]**2},
-            {'type': 'ineq', 'fun': lambda x:  x[0] * x[5] - x[1]**2},
-        )
-        if x0[1]**2 > x0[0] * x0[3] or x0[1]**2 > x0[0] * x0[5]:
-            print("*** Ajajaji ***")
-            assert False
-        res = minimize(func, x0=x0, bounds=bounds, constraints=constraints)
+        res = least_squares(erf, x0, bounds=bounds)
 
-        L0, Mg, Cg, L1_g, C1_g, L1_e, C1_e, R1_g, R1_e = res.x
+        # bounds = (
+        #     (1e-6, None),
+        #     (None, None),
+        #     (1e-6, None),
+        #     (1e-6, None),
+        #     (1e-6, None),
+        #     (1e-6, None),
+        #     (1e-6, None),
+        #     (1e-6, None),
+        # )
+        # constraints = (
+        #     {'type': 'ineq', 'fun': lambda x:  x[0] * x[3] - x[1]**2},
+        #     {'type': 'ineq', 'fun': lambda x:  x[0] * x[5] - x[1]**2},
+        # )
+        # if x0[1]**2 > x0[0] * x0[3] or x0[1]**2 > x0[0] * x0[5]:
+        #     print("*** Ajajaji ***")
+        #     assert False
+        # res = minimize(func, x0=x0, bounds=bounds, constraints=constraints)
+
+        # L0, Mg, Cg, L1_g, C1_g, L1_e, C1_e, R1 = res.x
+        L0, k, Cg, L1_g, C1_g, L1_e, C1_e, R1 = res.x
+        Mg_g = k * np.sqrt(L0 * L1_g)
+        Mg_e = k * np.sqrt(L0 * L1_e)
         L0 *= 1e-9
-        Mg *= 1e-9
+        Mg_g *= 1e-9
+        Mg_e *= 1e-9
         Cg *= 1e-9
         L1_g *= 1e-9
         C1_g *= 1e-9
         L1_e *= 1e-9
         C1_e *= 1e-9
-        R1_g *= 1e6
-        R1_e *= 1e6
-        para_g = cls(L0=L0, Mg=Mg, Cg=Cg, L1=L1_g, C1=C1_g, R1=R1_g, R0=R0, R2=R2, **kwargs)
-        para_e = cls(L0=L0, Mg=Mg, Cg=Cg, L1=L1_e, C1=C1_e, R1=R1_e, R0=R0, R2=R2, **kwargs)
+        R1 *= 1e6
+        para_g = cls(
+            L0=L0,
+            Mg=Mg_g,
+            Cg=Cg,
+            L1=L1_g,
+            C1=C1_g,
+            R1=R1,
+            R0=R0,
+            R2=R2,
+            **kwargs)
+        para_e = cls(
+            L0=L0,
+            Mg=Mg_e,
+            Cg=Cg,
+            L1=L1_e,
+            C1=C1_e,
+            R1=R1,
+            R0=R0,
+            R2=R2,
+            **kwargs)
 
         return res, para_g, para_e
 
     @classmethod
     def from_measurement_single(cls, w0, Qb, Ql, R0=50., R2=50., **kwargs):
         def erf(p):
-            L0, Mg, Cg, L1, C1, R1 = p
+            # L0, Mg, Cg, L1, C1, R1 = p
+            L0, k, Cg, L1, C1, R1 = p
+            Mg = k * np.sqrt(L0 * L1)
 
             L0 *= 1e-9
             Mg *= 1e-9
@@ -150,7 +203,16 @@ class SimulationParameters(object):
             C1 *= 1e-9
             R1 *= 1e6
 
-            para = cls(L0=L0, Mg=Mg, Cg=Cg, L1=L1, C1=C1, R1=R1, R0=R0, R2=R2, **kwargs)
+            para = cls(
+                L0=L0,
+                Mg=Mg,
+                Cg=Cg,
+                L1=L1,
+                C1=C1,
+                R1=R1,
+                R0=R0,
+                R2=R2,
+                **kwargs)
             my_w0, my_Ql = para.calculate_resonance(verbose=False)
 
             my_Qb = R1 * np.sqrt(C1 / L1)
@@ -168,42 +230,55 @@ class SimulationParameters(object):
 
         L0_0 = 1. / w0 / 1e3
         # Mg_0 = 1. / w0 / 1e1
+        k_0 = 0.1
         Cg_0 = 1. / w0 / 1e1
         L1_0 = 1. / w0
         C1_0 = 1. / w0
         R1_0 = Qb
 
-        Mg_0 = 0.1 * np.sqrt(L0_0 * L1_0)
+        # Mg_0 = k_0 * np.sqrt(L0_0 * L1_0)
 
         x0 = [
-            L0_0 * 1e9, Mg_0 * 1e9, Cg_0 * 1e9,
-            L1_0 * 1e9, C1_0 * 1e9, R1_0 / 1e6,
+            # L0_0 * 1e9, Mg_0 * 1e9, Cg_0 * 1e9,
+            L0_0 * 1e9,
+            k_0,
+            Cg_0 * 1e9,
+            L1_0 * 1e9,
+            C1_0 * 1e9,
+            R1_0 / 1e6,
         ]
 
-        # bounds = (1e-6, np.inf)
-        # res = least_squares(erf, x0, bounds=bounds)
-
         bounds = (
-            (1e-6, None),
-            (None, None),
-            (1e-6, None),
-            (1e-6, None),
-            (1e-6, None),
-            (1e-6, None),
+            [1e-6, -1., 1e-6, 1e-6, 1e-6, 1e-6],
+            [np.inf, 1., np.inf, np.inf, np.inf, np.inf],
         )
-        constraints = (
-            {'type': 'ineq', 'fun': lambda x:  x[0] * x[3] - x[1]**2},
-        )
-        res = minimize(func, x0=x0, bounds=bounds, constraints=constraints)
+        res = least_squares(erf, x0, bounds=bounds)
 
-        L0, Mg, Cg, L1, C1, R1 = res.x
+        # bounds = (
+        #     (1e-6, None),
+        #     # (None, None),
+        #     (-1., 1.),
+        #     (1e-6, None),
+        #     (1e-6, None),
+        #     (1e-6, None),
+        #     (1e-6, None),
+        # )
+        # constraints = (
+        #     {'type': 'ineq', 'fun': lambda x:  x[0] * x[3] - x[1]**2},
+        # )
+        # res = minimize(func, x0=x0, bounds=bounds, constraints=constraints)
+
+        # L0, Mg, Cg, L1, C1, R1 = res.x
+        L0, k, Cg, L1, C1, R1 = res.x
+        Mg = k * np.sqrt(L0 * L1)
         L0 *= 1e-9
         Mg *= 1e-9
         Cg *= 1e-9
         L1 *= 1e-9
         C1 *= 1e-9
         R1 *= 1e6
-        para = cls(L0=L0, Mg=Mg, Cg=Cg, L1=L1, C1=C1, R1=R1, R0=R0, R2=R2, **kwargs)
+        para = cls(
+            L0=L0, Mg=Mg, Cg=Cg, L1=L1, C1=C1, R1=R1, R0=R0, R2=R2, **kwargs)
 
         return res, para
 
@@ -854,7 +929,9 @@ class SimulationParameters(object):
             return w0, Q
         elif idx.sum() == 4:
             if verbose:
-                print("***!!! There's four complex roots, return the closest resonance")
+                print(
+                    "***!!! There's four complex roots, return the closest resonance"
+                )
             # Choose closest to bare frequency
             wb = 1. / np.sqrt(self.L1 * self.C1)
             assert roots[0] == np.conj(roots[1])
@@ -868,7 +945,8 @@ class SimulationParameters(object):
                 return w2, Q2
         else:
             if verbose:
-                print("***!!! No complex root found, return the closest cutoff")
+                print(
+                    "***!!! No complex root found, return the closest cutoff")
             wb = 1. / np.sqrt(self.L1 * self.C1)
             w0 = roots[np.argmin(np.abs(wb + roots))]
             return w0, 0.5
@@ -890,8 +968,11 @@ class SimulationParameters(object):
 
         d0 = r0 * r1 + r1 * r2
         d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
-        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG * (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (c1 * r1 + cG * (r1 + r2))
-        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG * (r1 + r2))
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG *
+                                (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (
+                                    c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG *
+                                                                (r1 + r2))
         d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
 
         return [d4, d3, d2, d1, d0]
@@ -924,11 +1005,15 @@ class SimulationParameters(object):
 
         d0 = r0 * r1 + r1 * r2
         d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
-        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG * (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (c1 * r1 + cG * (r1 + r2))
-        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG * (r1 + r2))
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG *
+                                (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (
+                                    c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG *
+                                                                (r1 + r2))
         d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
 
-        return (n0 + n1 * s + n2 * s**2 + n3 * s**3 + n4 * s**4) / (d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
+        return (n0 + n1 * s + n2 * s**2 + n3 * s**3 + n4 * s**4) / (
+            d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
 
     def tf1(self, f):
         """ Linear response function from the drive voltage V_G to the voltage
@@ -955,11 +1040,15 @@ class SimulationParameters(object):
 
         d0 = r0 * r1 + r1 * r2
         d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
-        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG * (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (c1 * r1 + cG * (r1 + r2))
-        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG * (r1 + r2))
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG *
+                                (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (
+                                    c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG *
+                                                                (r1 + r2))
         d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
 
-        return (n1 * s + n2 * s**2) / (d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
+        return (n1 * s + n2 * s**2) / (
+            d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
 
     def tf2(self, f):
         """ Linear response function from the drive voltage V_G to the voltage
@@ -987,11 +1076,15 @@ class SimulationParameters(object):
 
         d0 = r0 * r1 + r1 * r2
         d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
-        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG * (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (c1 * r1 + cG * (r1 + r2))
-        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG * (r1 + r2))
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG *
+                                (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (
+                                    c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG *
+                                                                (r1 + r2))
         d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
 
-        return (n0 + n1 * s + n2 * s**2) / (d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
+        return (n0 + n1 * s + n2 * s**2) / (
+            d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
 
     def tfn11(self, f):  # ***!!!
         """ Linear response function from the noise voltage Vn_1 to the voltage
