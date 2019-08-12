@@ -47,10 +47,8 @@ class SimulationParameters(object):
     """
 
     @classmethod
-    def from_measurement(cls, wc, chi, Qb, Ql, R0=50., R2=50.,
-                         **kwargs):  # ***!!!
+    def from_measurement(cls, wc, chi, Qb, Ql, R0=50., R2=50., **kwargs):
         def erf(p):
-            # L0, Mg, Cg, L1_g, C1_g, L1_e, C1_e, R1 = p
             L0, k, Cg, L1_g, C1_g, L1_e, C1_e, R1 = p
             Mg_g = k * np.sqrt(L0 * L1_g)
             Mg_e = k * np.sqrt(L0 * L1_e)
@@ -105,10 +103,6 @@ class SimulationParameters(object):
             ])
             return logerr
 
-        def func(p):
-            err = erf(p)
-            return np.sum(err**2)
-
         # guess initial parameters from single fit
         _, para_g = cls.from_measurement_single(wc - chi, Qb, Ql, **kwargs)
         _, para_e = cls.from_measurement_single(wc + chi, Qb, Ql, **kwargs)
@@ -119,7 +113,6 @@ class SimulationParameters(object):
             k = -k
         x0 = [
             1e9 * 0.5 * (para_g.L0 + para_e.L0),
-            # 1e9 * 0.5 * (para_g.Mg + para_e.Mg),
             k,
             1e9 * 0.5 * (para_g.Cg + para_e.Cg),
             1e9 * para_g.L1,
@@ -134,26 +127,6 @@ class SimulationParameters(object):
         )
         res = least_squares(erf, x0, bounds=bounds)
 
-        # bounds = (
-        #     (1e-6, None),
-        #     (None, None),
-        #     (1e-6, None),
-        #     (1e-6, None),
-        #     (1e-6, None),
-        #     (1e-6, None),
-        #     (1e-6, None),
-        #     (1e-6, None),
-        # )
-        # constraints = (
-        #     {'type': 'ineq', 'fun': lambda x:  x[0] * x[3] - x[1]**2},
-        #     {'type': 'ineq', 'fun': lambda x:  x[0] * x[5] - x[1]**2},
-        # )
-        # if x0[1]**2 > x0[0] * x0[3] or x0[1]**2 > x0[0] * x0[5]:
-        #     print("*** Ajajaji ***")
-        #     assert False
-        # res = minimize(func, x0=x0, bounds=bounds, constraints=constraints)
-
-        # L0, Mg, Cg, L1_g, C1_g, L1_e, C1_e, R1 = res.x
         L0, k, Cg, L1_g, C1_g, L1_e, C1_e, R1 = res.x
         Mg_g = k * np.sqrt(L0 * L1_g)
         Mg_e = k * np.sqrt(L0 * L1_e)
@@ -192,7 +165,6 @@ class SimulationParameters(object):
     @classmethod
     def from_measurement_single(cls, w0, Qb, Ql, R0=50., R2=50., **kwargs):
         def erf(p):
-            # L0, Mg, Cg, L1, C1, R1 = p
             L0, k, Cg, L1, C1, R1 = p
             Mg = k * np.sqrt(L0 * L1)
 
@@ -224,22 +196,14 @@ class SimulationParameters(object):
             ])
             return logerr
 
-        def func(p):
-            err = erf(p)
-            return np.sum(err**2)
-
         L0_0 = 1. / w0 / 1e3
-        # Mg_0 = 1. / w0 / 1e1
         k_0 = 0.1
         Cg_0 = 1. / w0 / 1e1
         L1_0 = 1. / w0
         C1_0 = 1. / w0
         R1_0 = Qb
 
-        # Mg_0 = k_0 * np.sqrt(L0_0 * L1_0)
-
         x0 = [
-            # L0_0 * 1e9, Mg_0 * 1e9, Cg_0 * 1e9,
             L0_0 * 1e9,
             k_0,
             Cg_0 * 1e9,
@@ -254,21 +218,6 @@ class SimulationParameters(object):
         )
         res = least_squares(erf, x0, bounds=bounds)
 
-        # bounds = (
-        #     (1e-6, None),
-        #     # (None, None),
-        #     (-1., 1.),
-        #     (1e-6, None),
-        #     (1e-6, None),
-        #     (1e-6, None),
-        #     (1e-6, None),
-        # )
-        # constraints = (
-        #     {'type': 'ineq', 'fun': lambda x:  x[0] * x[3] - x[1]**2},
-        # )
-        # res = minimize(func, x0=x0, bounds=bounds, constraints=constraints)
-
-        # L0, Mg, Cg, L1, C1, R1 = res.x
         L0, k, Cg, L1, C1, R1 = res.x
         Mg = k * np.sqrt(L0 * L1)
         L0 *= 1e-9
@@ -798,7 +747,7 @@ class SimulationParameters(object):
             self.para.duff1 *= __P__**2
             self.para.phi0 /= __P__
             if self.add_thermal_noise:
-                self.noise0_array /= __V__  # ***!!!
+                self.noise0_array /= __V__
                 self.noise1_array /= __V__
                 self.noise2_array /= __V__
 
@@ -846,7 +795,7 @@ class SimulationParameters(object):
             self.para.duff1 /= __P__**2
             self.para.phi0 *= __P__
             if self.add_thermal_noise:
-                self.noise0_array *= __V__  # ***!!!
+                self.noise0_array *= __V__
                 self.noise1_array *= __V__
                 self.noise2_array *= __V__
 
@@ -912,7 +861,7 @@ class SimulationParameters(object):
             f_out = n * df_out
         return f_out, df_out
 
-    def calculate_resonance(self, verbose=True):  # ***!!!
+    def calculate_resonance(self, verbose=True):
         """ Calculate resonance frequency and quality factor from the poles of the transfer function.
 
         Returns:
@@ -1086,119 +1035,21 @@ class SimulationParameters(object):
         return (n0 + n1 * s + n2 * s**2) / (
             d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
 
-    def tfn11(self, f):  # ***!!!
-        """ Linear response function from the noise voltage Vn_1 to the voltage
-        on the oscillator V_1.
-
-        Args:
-            f (float or np.ndarray): frequency in hertz (Hz)
-
-        Returns:
-            (float or np.ndarray)
-        """
-        s = 1j * 2. * np.pi * f
-        r0 = self.R0
-        r1 = self.R1
-        r2 = self.R2
-        c1 = self.C1
-        lG = self.Lg
-        l1 = self.L1
-
-        n1 = l1 * r0 * r2
-        n2 = l1 * lG * (r0 + r2)
-
-        d0 = r0 * r1 * r2
-        d1 = l1 * r0 * r1 + l1 * (r0 + r1) * r2 + lG * r1 * (r0 + r2)
-        d2 = l1 * (c1 * r0 * r1 * r2 + lG * (r0 + r2))
-        d3 = c1 * l1 * lG * r1 * (r0 + r2)
-
-        return (n1 * s + n2 * s**2) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
-
-    def tfn1P1(self, f):  # ***!!!
-        """ Linear response function from the noise voltage Vn_1 to the flux
-        on the oscillator P_1.
-
-        Args:
-            f (float or np.ndarray): frequency in hertz (Hz)
-
-        Returns:
-            (float or np.ndarray)
-        """
-        s = 1j * 2. * np.pi * f
-        r0 = self.R0
-        r1 = self.R1
-        r2 = self.R2
-        c1 = self.C1
-        lG = self.Lg
-        l1 = self.L1
-
-        n0 = l1 * r0 * r2
-        n1 = l1 * lG * (r0 + r2)
-
-        d0 = r0 * r1 * r2
-        d1 = l1 * r0 * r1 + l1 * (r0 + r1) * r2 + lG * r1 * (r0 + r2)
-        d2 = l1 * (c1 * r0 * r1 * r2 + lG * (r0 + r2))
-        d3 = c1 * l1 * lG * r1 * (r0 + r2)
-
-        return (n0 + n1 * s) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
-
-    def tfn10(self, f):  # ***!!!
-        """ Linear response function from the noise voltage Vn_1 to the voltage
-        at the input port V_0.
-
-        Args:
-            f (float or np.ndarray): frequency in hertz (Hz)
-
-        Returns:
-            (float or np.ndarray)
-        """
-        s = 1j * 2. * np.pi * f
-        r0 = self.R0
-        r1 = self.R1
-        r2 = self.R2
-        c1 = self.C1
-        lG = self.Lg
-        l1 = self.L1
-
-        n1 = l1 * r0 * r2
-
-        d0 = r0 * r1 * r2
-        d1 = l1 * r0 * r1 + l1 * (r0 + r1) * r2 + lG * r1 * (r0 + r2)
-        d2 = l1 * (c1 * r0 * r1 * r2 + lG * (r0 + r2))
-        d3 = c1 * l1 * lG * r1 * (r0 + r2)
-
-        return (n1 * s) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
-
-    def tfn1P0(self, f):  # ***!!!
-        """ Linear response function from the noise voltage Vn_1 to the flux
-        at the input port P_0.
-
-        Args:
-            f (float or np.ndarray): frequency in hertz (Hz)
-
-        Returns:
-            (float or np.ndarray)
-        """
-        s = 1j * 2. * np.pi * f
-        r0 = self.R0
-        r1 = self.R1
-        r2 = self.R2
-        c1 = self.C1
-        lG = self.Lg
-        l1 = self.L1
-
-        n0 = l1 * r0 * r2
-
-        d0 = r0 * r1 * r2
-        d1 = l1 * r0 * r1 + l1 * (r0 + r1) * r2 + lG * r1 * (r0 + r2)
-        d2 = l1 * (c1 * r0 * r1 * r2 + lG * (r0 + r2))
-        d3 = c1 * l1 * lG * r1 * (r0 + r2)
-
-        return (n0) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
-
-    def tfn00(self, f):  # ***!!!
+    def tfn00(self, f):
         """ Linear response function from the noise voltage Vn_0 to the voltage
-        at the input port V_0.
+        on the transmission line V_0.
+
+        Args:
+            f (float or np.ndarray): frequency in hertz (Hz)
+
+        Returns:
+            (float or np.ndarray)
+        """
+        return self.tf0(f)
+
+    def tfn0I0(self, f):
+        """ Linear response function from the noise voltage Vn_0 to the current
+        through the trasmission line_I0.
 
         Args:
             f (float or np.ndarray): frequency in hertz (Hz)
@@ -1208,55 +1059,32 @@ class SimulationParameters(object):
         """
         s = 1j * 2. * np.pi * f
         r0 = self.R0
+        l0 = self.L0
+        mG = self.Mg
+        cG = self.Cg
+        l1 = self.L1
+        c1 = self.C1
         r1 = self.R1
         r2 = self.R2
-        c1 = self.C1
-        lG = self.Lg
-        l1 = self.L1
 
-        n1 = (l1 * r1 + lG * r1) * r2
-        n2 = l1 * lG * r2
-        n3 = c1 * l1 * lG * r1 * r2
+        n0 = r1
+        n1 = l1 + cG * r1 * r2
+        n2 = l1 * (c1 * r1 + cG * (r1 + r2))
+        n3 = c1 * cG * l1 * r1 * r2
 
-        d0 = r0 * r1 * r2
-        d1 = l1 * r0 * r1 + l1 * (r0 + r1) * r2 + lG * r1 * (r0 + r2)
-        d2 = l1 * (c1 * r0 * r1 * r2 + lG * (r0 + r2))
-        d3 = c1 * l1 * lG * r1 * (r0 + r2)
+        d0 = r0 * r1 + r1 * r2
+        d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG *
+                                (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (
+                                    c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG *
+                                                                (r1 + r2))
+        d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
 
-        return (n1 * s + n2 * s**2 + n3 * s**3) / (
-            d0 + d1 * s + d2 * s**2 + d3 * s**3)
+        return (n0 + n1 * s + n2 * s**2 + n3 * s**3) / (
+            d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
 
-    def tfn0P0(self, f):  # ***!!!
-        """ Linear response function from the noise voltage Vn_0 to the flux
-        at the input port P_0.
-
-        Args:
-            f (float or np.ndarray): frequency in hertz (Hz)
-
-        Returns:
-            (float or np.ndarray)
-        """
-        s = 1j * 2. * np.pi * f
-        r0 = self.R0
-        r1 = self.R1
-        r2 = self.R2
-        c1 = self.C1
-        lG = self.Lg
-        l1 = self.L1
-
-        n0 = (l1 * r1 + lG * r1) * r2
-        n1 = l1 * lG * r2
-        n2 = c1 * l1 * lG * r1 * r2
-
-        d0 = r0 * r1 * r2
-        d1 = l1 * r0 * r1 + l1 * (r0 + r1) * r2 + lG * r1 * (r0 + r2)
-        d2 = l1 * (c1 * r0 * r1 * r2 + lG * (r0 + r2))
-        d3 = c1 * l1 * lG * r1 * (r0 + r2)
-
-        return (n0 + n1 * s + n2 * s**2) / (
-            d0 + d1 * s + d2 * s**2 + d3 * s**3)
-
-    def tfn01(self, f):  # ***!!!
+    def tfn01(self, f):
         """ Linear response function from the noise voltage Vn_0 to the voltage
         on the oscillator V_1.
 
@@ -1266,24 +1094,9 @@ class SimulationParameters(object):
         Returns:
             (float or np.ndarray)
         """
-        s = 1j * 2. * np.pi * f
-        r0 = self.R0
-        r1 = self.R1
-        r2 = self.R2
-        c1 = self.C1
-        lG = self.Lg
-        l1 = self.L1
+        return self.tf1(f)
 
-        n1 = l1 * r1 * r2
-
-        d0 = r0 * r1 * r2
-        d1 = l1 * r0 * r1 + l1 * (r0 + r1) * r2 + lG * r1 * (r0 + r2)
-        d2 = l1 * (c1 * r0 * r1 * r2 + lG * (r0 + r2))
-        d3 = c1 * l1 * lG * r1 * (r0 + r2)
-
-        return (n1 * s) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
-
-    def tfn0P1(self, f):  # ***!!!
+    def tfn0P1(self, f):
         """ Linear response function from the noise voltage Vn_0 to the flux
         on the oscillator P_1.
 
@@ -1295,22 +1108,220 @@ class SimulationParameters(object):
         """
         s = 1j * 2. * np.pi * f
         r0 = self.R0
+        l0 = self.L0
+        mG = self.Mg
+        cG = self.Cg
+        l1 = self.L1
+        c1 = self.C1
         r1 = self.R1
         r2 = self.R2
-        c1 = self.C1
-        lG = self.Lg
+
+        n0 = mG * r1
+        n1 = cG * (l1 + mG) * r1 * r2
+
+        d0 = r0 * r1 + r1 * r2
+        d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG *
+                                (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (
+                                    c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG *
+                                                                (r1 + r2))
+        d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
+
+        return (n0 + n1 * s) / (
+            d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
+
+    def tfn02(self, f):
+        """ Linear response function from the noise voltage Vn_0 to the voltage
+        on the output port V_2.
+
+        Args:
+            f (float or np.ndarray): frequency in hertz (Hz)
+
+        Returns:
+            (float or np.ndarray)
+        """
+        return self.tf2(f)
+
+    def tfn10(self, f):
+        """ Linear response function from the noise voltage Vn_1 to the voltage
+        on the transmission line V_0.
+
+        Args:
+            f (float or np.ndarray): frequency in hertz (Hz)
+
+        Returns:
+            (float or np.ndarray)
+        """
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        l0 = self.L0
+        mG = self.Mg
+        cG = self.Cg
         l1 = self.L1
+        c1 = self.C1
+        r1 = self.R1
+        r2 = self.R2
 
-        n0 = l1 * r1 * r2
+        n1 = -mG * r0
+        n2 = -cG * (l1 + mG) * r0 * r2
 
-        d0 = r0 * r1 * r2
-        d1 = l1 * r0 * r1 + l1 * (r0 + r1) * r2 + lG * r1 * (r0 + r2)
-        d2 = l1 * (c1 * r0 * r1 * r2 + lG * (r0 + r2))
-        d3 = c1 * l1 * lG * r1 * (r0 + r2)
+        d0 = r0 * r1 + r1 * r2
+        d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG *
+                                (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (
+                                    c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG *
+                                                                (r1 + r2))
+        d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
 
-        return (n0) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
+        return (n1 * s + n2 * s**2) / (
+            d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
 
-    def tfn20(self, f):  # ***!!!
+    def tfn1I0(self, f):
+        """ Linear response function from the noise voltage Vn_1 to the current
+        on the transmission line I_0.
+
+        Args:
+            f (float or np.ndarray): frequency in hertz (Hz)
+
+        Returns:
+            (float or np.ndarray)
+        """
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        l0 = self.L0
+        mG = self.Mg
+        cG = self.Cg
+        l1 = self.L1
+        c1 = self.C1
+        r1 = self.R1
+        r2 = self.R2
+
+        n1 = mG
+        n2 = cG * (l1 + mG) * r2
+
+        d0 = r0 * r1 + r1 * r2
+        d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG *
+                                (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (
+                                    c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG *
+                                                                (r1 + r2))
+        d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
+
+        return (n1 * s + n2 * s**2) / (
+            d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
+
+    def tfn11(self, f):
+        """ Linear response function from the noise voltage Vn_1 to the voltage
+        on the oscillator V_1.
+
+        Args:
+            f (float or np.ndarray): frequency in hertz (Hz)
+
+        Returns:
+            (float or np.ndarray)
+        """
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        l0 = self.L0
+        mG = self.Mg
+        cG = self.Cg
+        l1 = self.L1
+        c1 = self.C1
+        r1 = self.R1
+        r2 = self.R2
+
+        n1 = -l1 * r0 - l1 * r2
+        n2 = -l0 * l1 + mG**2 - cG * l1 * r0 * r2
+        n3 = -cG * l0 * l1 * r2 + cG * mG**2 * r2
+
+        d0 = r0 * r1 + r1 * r2
+        d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG *
+                                (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (
+                                    c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG *
+                                                                (r1 + r2))
+        d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
+
+        return (n1 * s + n2 * s**2 + n3 * s**3) / (
+            d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
+
+    def tfn1P1(self, f):
+        """ Linear response function from the noise voltage Vn_1 to the flux
+        on the oscillator P_1.
+
+        Args:
+            f (float or np.ndarray): frequency in hertz (Hz)
+
+        Returns:
+            (float or np.ndarray)
+        """
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        l0 = self.L0
+        mG = self.Mg
+        cG = self.Cg
+        l1 = self.L1
+        c1 = self.C1
+        r1 = self.R1
+        r2 = self.R2
+
+        n0 = -l1 * r0 - l1 * r2
+        n1 = -l0 * l1 + mG**2 - cG * l1 * r0 * r2
+        n2 = -cG * l0 * l1 * r2 + cG * mG**2 * r2
+
+        d0 = r0 * r1 + r1 * r2
+        d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG *
+                                (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (
+                                    c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG *
+                                                                (r1 + r2))
+        d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
+
+        return (n0 + n1 * s + n2 * s**2) / (
+            d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
+
+    def tfn12(self, f):
+        """ Linear response function from the noise voltage Vn_1 to the voltage
+        on the output port V_2.
+
+        Args:
+            f (float or np.ndarray): frequency in hertz (Hz)
+
+        Returns:
+            (float or np.ndarray)
+        """
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        l0 = self.L0
+        mG = self.Mg
+        cG = self.Cg
+        l1 = self.L1
+        c1 = self.C1
+        r1 = self.R1
+        r2 = self.R2
+
+        n1 = mG * r2
+        n2 = -cG * l1 * r0 * r2
+        n3 = (-cG * l0 * l1 + cG * mG**2) * r2
+
+        d0 = r0 * r1 + r1 * r2
+        d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG *
+                                (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (
+                                    c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG *
+                                                                (r1 + r2))
+        d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
+
+        return (n1 * s + n2 * s**2 + n3 * s**3) / (
+            d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
+
+    def tfn20(self, f):
         """ Linear response function from the noise voltage Vn_2 to the voltage
         at the input port V_0.
 
@@ -1322,27 +1333,33 @@ class SimulationParameters(object):
         """
         s = 1j * 2. * np.pi * f
         r0 = self.R0
+        l0 = self.L0
+        mG = self.Mg
+        cG = self.Cg
+        l1 = self.L1
+        c1 = self.C1
         r1 = self.R1
         r2 = self.R2
-        c1 = self.C1
-        lG = self.Lg
-        l1 = self.L1
 
-        n1 = r0 * (l1 * r1 + lG * r1)
-        n2 = l1 * lG * r0
-        n3 = c1 * l1 * lG * r0 * r1
+        n0 = -r0 * r1
+        n1 = -l1 * r0
+        n2 = -(c1 * l1 + cG * (l1 + mG)) * r0 * r1
 
-        d0 = r0 * r1 * r2
-        d1 = l1 * r0 * r1 + l1 * (r0 + r1) * r2 + lG * r1 * (r0 + r2)
-        d2 = l1 * (c1 * r0 * r1 * r2 + lG * (r0 + r2))
-        d3 = c1 * l1 * lG * r1 * (r0 + r2)
+        d0 = r0 * r1 + r1 * r2
+        d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG *
+                                (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (
+                                    c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG *
+                                                                (r1 + r2))
+        d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
 
-        return (n1 * s + n2 * s**2 + n3 * s**3) / (
-            d0 + d1 * s + d2 * s**2 + d3 * s**3)
+        return (n0 + n1 * s + n2 * s**2) / (
+            d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
 
-    def tfn2P0(self, f):  # ***!!!
-        """ Linear response function from the noise voltage Vn_2 to the flux
-        at the input port P_0.
+    def tfn2I0(self, f):
+        """ Linear response function from the noise voltage Vn_2 to the current
+        in the transmission line I_0.
 
         Args:
             f (float or np.ndarray): frequency in hertz (Hz)
@@ -1352,25 +1369,31 @@ class SimulationParameters(object):
         """
         s = 1j * 2. * np.pi * f
         r0 = self.R0
+        l0 = self.L0
+        mG = self.Mg
+        cG = self.Cg
+        l1 = self.L1
+        c1 = self.C1
         r1 = self.R1
         r2 = self.R2
-        c1 = self.C1
-        lG = self.Lg
-        l1 = self.L1
 
-        n0 = r0 * (l1 * r1 + lG * r1)
-        n1 = l1 * lG * r0
-        n2 = c1 * l1 * lG * r0 * r1
+        n0 = r1
+        n1 = l1
+        n2 = (c1 * l1 + cG * (l1 + mG)) * r1
 
-        d0 = r0 * r1 * r2
-        d1 = l1 * r0 * r1 + l1 * (r0 + r1) * r2 + lG * r1 * (r0 + r2)
-        d2 = l1 * (c1 * r0 * r1 * r2 + lG * (r0 + r2))
-        d3 = c1 * l1 * lG * r1 * (r0 + r2)
+        d0 = r0 * r1 + r1 * r2
+        d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG *
+                                (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (
+                                    c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG *
+                                                                (r1 + r2))
+        d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
 
         return (n0 + n1 * s + n2 * s**2) / (
-            d0 + d1 * s + d2 * s**2 + d3 * s**3)
+            d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
 
-    def tfn21(self, f):  # ***!!!
+    def tfn21(self, f):
         """ Linear response function from the noise voltage Vn_2 to the voltage
         on the oscillator V_1.
 
@@ -1382,22 +1405,31 @@ class SimulationParameters(object):
         """
         s = 1j * 2. * np.pi * f
         r0 = self.R0
+        l0 = self.L0
+        mG = self.Mg
+        cG = self.Cg
+        l1 = self.L1
+        c1 = self.C1
         r1 = self.R1
         r2 = self.R2
-        c1 = self.C1
-        lG = self.Lg
-        l1 = self.L1
 
-        n1 = l1 * r1 * r0
+        n1 = mG * r1
+        n2 = -cG * l1 * r0 * r1
+        n3 = (-cG * l0 * l1 + cG * mG**2) * r1
 
-        d0 = r0 * r1 * r2
-        d1 = l1 * r0 * r1 + l1 * (r0 + r1) * r2 + lG * r1 * (r0 + r2)
-        d2 = l1 * (c1 * r0 * r1 * r2 + lG * (r0 + r2))
-        d3 = c1 * l1 * lG * r1 * (r0 + r2)
+        d0 = r0 * r1 + r1 * r2
+        d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG *
+                                (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (
+                                    c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG *
+                                                                (r1 + r2))
+        d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
 
-        return (n1 * s) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
+        return (n1 * s + n2 * s**2 + n3 * s**3) / (
+            d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
 
-    def tfn2P1(self, f):  # ***!!!
+    def tfn2P1(self, f):
         """ Linear response function from the noise voltage Vn_2 to the flux
         on the oscillator P_1.
 
@@ -1409,20 +1441,66 @@ class SimulationParameters(object):
         """
         s = 1j * 2. * np.pi * f
         r0 = self.R0
+        l0 = self.L0
+        mG = self.Mg
+        cG = self.Cg
+        l1 = self.L1
+        c1 = self.C1
         r1 = self.R1
         r2 = self.R2
-        c1 = self.C1
-        lG = self.Lg
+
+        n0 = mG * r1
+        n1 = -cG * l1 * r0 * r1
+        n2 = (-cG * l0 * l1 + cG * mG**2) * r1
+
+        d0 = r0 * r1 + r1 * r2
+        d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG *
+                                (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (
+                                    c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG *
+                                                                (r1 + r2))
+        d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
+
+        return (n0 + n1 * s + n2 * s**2) / (
+            d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
+
+    def tfn22(self, f):
+        """ Linear response function from the noise voltage Vn_2 to the voltage
+        at the output port V_2.
+
+        Args:
+            f (float or np.ndarray): frequency in hertz (Hz)
+
+        Returns:
+            (float or np.ndarray)
+        """
+        s = 1j * 2. * np.pi * f
+        r0 = self.R0
+        l0 = self.L0
+        mG = self.Mg
+        cG = self.Cg
         l1 = self.L1
+        c1 = self.C1
+        r1 = self.R1
+        r2 = self.R2
 
-        n0 = l1 * r1 * r0
+        n0 = -r0 * r1
+        n1 = -l1 * r0 - l0 * r1
+        n2 = -l0 * l1 + mG**2 + (-c1 - cG) * l1 * r0 * r1
+        n3 = (-c1 - cG) * l0 * l1 * r1 + (c1 + cG) * mG**2 * r1
 
-        d0 = r0 * r1 * r2
-        d1 = l1 * r0 * r1 + l1 * (r0 + r1) * r2 + lG * r1 * (r0 + r2)
-        d2 = l1 * (c1 * r0 * r1 * r2 + lG * (r0 + r2))
-        d3 = c1 * l1 * lG * r1 * (r0 + r2)
+        d0 = r0 * r1 + r1 * r2
+        d1 = l0 * r1 + l1 * r2 + r0 * (l1 + cG * r1 * r2)
+        d2 = l0 * l1 - mG**2 + (c1 * l1 + cG *
+                                (l0 + l1 + 2 * mG)) * r1 * r2 + l1 * r0 * (
+                                    c1 * r1 + cG * (r1 + r2))
+        d3 = c1 * cG * l1 * r0 * r1 * r2 + (l0 * l1 - mG**2) * (c1 * r1 + cG *
+                                                                (r1 + r2))
+        d4 = c1 * cG * (l0 * l1 - mG**2) * r1 * r2
 
-        return (n0) / (d0 + d1 * s + d2 * s**2 + d3 * s**3)
+        return (n0 + n1 * s + n2 * s**2 + n3 * s**3) / (
+            d0 + d1 * s + d2 * s**2 + d3 * s**3 + d4 * s**4)
 
 
 # Load the C library and set arguments and return types

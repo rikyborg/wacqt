@@ -22,11 +22,12 @@ rcParams['ytick.labelsize'] = 'large'
 #     R0=50., R2=50.,
 #     fs=3e9,
 # )
-_, para = sim.SimulationParameters.from_measurement_single(2. * np.pi * 1e9, 1e3, 1e2)
+_, para = sim.SimulationParameters.from_measurement_single(2. * np.pi * 1e9, 1e4, 1e2, fs=20e9)
 df = 1e6  # Hz
 
 w0, Q = para.calculate_resonance()
 f0 = w0 / (2. * np.pi)
+bw = f0 / Q
 
 AMP = 0.5e-6  # V
 PHASE = 0.  # rad
@@ -91,9 +92,10 @@ respV0_array *= 2. / (AMP * np.exp(1j * PHASE))
 respV1_array *= 2. / (AMP * np.exp(1j * PHASE))
 respV2_array *= 2. / (AMP * np.exp(1j * PHASE))
 
-G0 = para.tf0(f_array)
-G1 = para.tf1(f_array)
-G2 = para.tf2(f_array)
+f_plot = np.linspace(fstart, fstop, 20001)
+G0 = para.tf0(f_plot)
+G1 = para.tf1(f_plot)
+G2 = para.tf2(f_plot)
 
 
 fig, ax = plt.subplots(2, 3, sharex=True, tight_layout=True)
@@ -101,22 +103,27 @@ ax1, ax2 = ax
 ax11, ax12, ax13 = ax1
 ax21, ax22, ax23 = ax2
 
+for _ax in ax.flatten():
+    _ax.axvline(1e-9 * f0, ls='--', c='tab:gray')
+    _ax.axvline(1e-9 * (f0 - bw / 2), ls='--', c='tab:gray')
+    _ax.axvline(1e-9 * (f0 + bw / 2), ls='--', c='tab:gray')
+
 ax11.plot(1e-9 * actual_f_array, 20. * np.log10(np.abs(respV0_array)), '.', c='tab:blue')
-ax11.plot(1e-9 * f_array, 20. * np.log10(np.abs(G0)), '--', c='tab:green')
+ax11.plot(1e-9 * f_plot, 20. * np.log10(np.abs(G0)), '--', c='tab:green')
 ax21.plot(1e-9 * actual_f_array, np.angle(respV0_array), '.', c='tab:orange')
-ax21.plot(1e-9 * f_array, np.angle(G0), '--', c='tab:red')
+ax21.plot(1e-9 * f_plot, np.angle(G0), '--', c='tab:red')
 ax11.set_title('Transmission line')
 
 ax12.plot(1e-9 * actual_f_array, 20. * np.log10(np.abs(respV1_array)), '.', c='tab:blue')
-ax12.plot(1e-9 * f_array, 20. * np.log10(np.abs(G1)), '--', c='tab:green')
+ax12.plot(1e-9 * f_plot, 20. * np.log10(np.abs(G1)), '--', c='tab:green')
 ax22.plot(1e-9 * actual_f_array, np.angle(respV1_array), '.', c='tab:orange')
-ax22.plot(1e-9 * f_array, np.angle(G1), '--', c='tab:red')
+ax22.plot(1e-9 * f_plot, np.angle(G1), '--', c='tab:red')
 ax12.set_title('Oscillator')
 
 ax13.plot(1e-9 * actual_f_array, 20. * np.log10(np.abs(respV2_array)), '.', c='tab:blue')
-ax13.plot(1e-9 * f_array, 20. * np.log10(np.abs(G2)), '--', c='tab:green')
+ax13.plot(1e-9 * f_plot, 20. * np.log10(np.abs(G2)), '--', c='tab:green')
 ax23.plot(1e-9 * actual_f_array, np.angle(respV2_array), '.', c='tab:orange')
-ax23.plot(1e-9 * f_array, np.angle(G2), '--', c='tab:red')
+ax23.plot(1e-9 * f_plot, np.angle(G2), '--', c='tab:red')
 ax13.set_title('Output port')
 
 fig.show()

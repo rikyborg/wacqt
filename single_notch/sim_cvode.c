@@ -214,19 +214,15 @@ static int ode_linear(realtype t, N_Vector y, N_Vector ydot, void* user_data) {
 
     /* Add noise */
     if (para->add_thermal_noise == true) {
-        realtype r1 = para->R1;
-        realtype c1 = para->C1;
-        realtype r0 = para->R0;
-        realtype r2 = para->R2;
-        realtype rP = r0 * r2 / (r0 + r2);
-
         realtype Vn0 = V_noise(t, 0, para);
         realtype Vn1 = V_noise(t, 1, para);
         realtype Vn2 = V_noise(t, 2, para);
 
-        NV_Ith_S(ydot, 0) += rP / r0 * Vn0;
-        NV_Ith_S(ydot, 0) += rP / r2 * Vn2;
-        NV_Ith_S(ydot, 2) += 1. / (r1 * c1) * Vn1;
+        NV_Ith_S(ydot, 0) += para->b[0] * Vn0;
+        NV_Ith_S(ydot, 2) += para->a[2][2] * Vn1;
+        NV_Ith_S(ydot, 2) += para->a[2][3] * Vn2;
+        NV_Ith_S(ydot, 3) += para->a[3][2] * Vn1;
+        NV_Ith_S(ydot, 3) += para->a[3][3] * Vn2;
     }
 
     return(0);
