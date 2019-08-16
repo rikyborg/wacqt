@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.special import erf
 
-file_name = 'fidelity_chi_2e6_kappa_4e5_Nruns_65536.npz'
+file_name = 'fidelity_chi_2e+06_kappa_2e+05_Nruns_65536.npz'
 
 with np.load(file_name) as npz:
     state_arr = npz['state_arr']

@@ -1,10 +1,10 @@
 import numpy as np
 
 file_list = [
-    'fidelity_chi_2e6_kappa_4e5_Nruns_16384_1.npz',
-    'fidelity_chi_2e6_kappa_4e5_Nruns_16384_2.npz',
-    'fidelity_chi_2e6_kappa_4e5_Nruns_16384_3.npz',
-    'fidelity_chi_2e6_kappa_4e5_Nruns_16384_4.npz',
+    'fidelity_chi_2e+06_kappa_2e+05_Nruns_16384_1.npz',
+    'fidelity_chi_2e+06_kappa_2e+05_Nruns_16384_2.npz',
+    'fidelity_chi_2e+06_kappa_2e+05_Nruns_16384_3.npz',
+    'fidelity_chi_2e+06_kappa_2e+05_Nruns_16384_4.npz',
 ]
 
 N = int(file_list[0].split('_')[-2])

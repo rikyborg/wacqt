@@ -11,14 +11,20 @@ Nruns = 65536 // 4
 
 _wc = 2. * np.pi * 6e9
 _chi = 2. * np.pi * 2e6
-_Qb = 10e6
-_kappa = _chi / 5
+# _Qb = 10e6
+_kappa = _chi / 10
 _Ql = _wc / _kappa
-AMP = 1.690e-6  # V
-save_filename = "fidelity_chi_2e6_kappa_4e5_Nruns_16384_4.npz"
+_Qb = _Ql * 100
+AMP = 2.261e-6  # V
+save_filename = "fidelity_chi_{:.0g}_kappa_{:.0g}_Nruns_{:d}_4.npz".format(
+    _chi / (2. * np.pi),
+    _kappa / (2. * np.pi),
+    Nruns,
+)
 
 res, para_g, para_e = sim.SimulationParameters.from_measurement(
     _wc, _chi, _Qb, _Ql)
+assert res.success
 
 w_g, Q_g = para_g.calculate_resonance()
 w_e, Q_e = para_e.calculate_resonance()
@@ -56,17 +62,11 @@ def dist(f, g):
     return norm(f - g)
 
 
-def get_envelopes(sol, para, Vg):
-    P0 = sol[:, 0]
+def get_envelopes(sol, para):
+    I0 = sol[:, 0]
     P1 = sol[:, 1]
     V1 = sol[:, 2]
-    if para.add_thermal_noise:
-        Vn0 = para.noise0_array[:-2]
-        Vn2 = para.noise2_array[:-2]
-    else:
-        Vn0 = 0.
-        Vn2 = 0.
-    V0 = para.calculate_V0(P0, P1, Vg, Vn0, Vn2)
+    V2 = sol[:, 3]
 
     Nimps = 31
     Npoints = 1000
@@ -76,32 +76,32 @@ def get_envelopes(sol, para, Vg):
     t_envelope = np.linspace(
         0., para.Nbeats / para.df, Npoints, endpoint=False)
 
-    P0_spectrum = np.fft.rfft(P0) / len(P0)
-    V0_spectrum = np.fft.rfft(V0) / len(V0)
+    I0_spectrum = np.fft.rfft(I0) / len(I0)
     P1_spectrum = np.fft.rfft(P1) / len(P1)
     V1_spectrum = np.fft.rfft(V1) / len(V1)
+    V2_spectrum = np.fft.rfft(V2) / len(V2)
 
-    P0_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
-    V0_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
+    I0_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
     P1_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
     V1_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
+    V2_envelope_spectrum = np.zeros(Npoints, dtype=np.complex128)
 
-    P0_envelope_spectrum[karray - para.Nbeats * nc] = P0_spectrum[karray]
-    V0_envelope_spectrum[karray - para.Nbeats * nc] = V0_spectrum[karray]
+    I0_envelope_spectrum[karray - para.Nbeats * nc] = I0_spectrum[karray]
     P1_envelope_spectrum[karray - para.Nbeats * nc] = P1_spectrum[karray]
     V1_envelope_spectrum[karray - para.Nbeats * nc] = V1_spectrum[karray]
+    V2_envelope_spectrum[karray - para.Nbeats * nc] = V2_spectrum[karray]
 
-    P0_envelope = np.fft.ifft(P0_envelope_spectrum) * Npoints
-    V0_envelope = np.fft.ifft(V0_envelope_spectrum) * Npoints
+    I0_envelope = np.fft.ifft(I0_envelope_spectrum) * Npoints
     P1_envelope = np.fft.ifft(P1_envelope_spectrum) * Npoints
     V1_envelope = np.fft.ifft(V1_envelope_spectrum) * Npoints
+    V2_envelope = np.fft.ifft(V2_envelope_spectrum) * Npoints
 
     return (
         t_envelope,
-        P0_envelope,
-        V0_envelope,
+        I0_envelope,
         P1_envelope,
         V1_envelope,
+        V2_envelope,
     )
 
 
@@ -121,21 +121,25 @@ def get_init_array(para, N):
     Vn1_fft = np.fft.rfft(Vn1) / ns
     Vn2_fft = np.fft.rfft(Vn2) / ns
 
-    P0_fft = para.tfn0P0(freqs) * Vn0_fft + para.tfn1P0(
-        freqs) * Vn1_fft + para.tfn2P0(freqs) * Vn2_fft
+    I0_fft = para.tfn0I0(freqs) * Vn0_fft + para.tfn1I0(
+        freqs) * Vn1_fft + para.tfn2I0(freqs) * Vn2_fft
     P1_fft = para.tfn0P1(freqs) * Vn0_fft + para.tfn1P1(
         freqs) * Vn1_fft + para.tfn2P1(freqs) * Vn2_fft
     V1_fft = para.tfn01(freqs) * Vn0_fft + para.tfn11(
         freqs) * Vn1_fft + para.tfn21(freqs) * Vn2_fft
+    V2_fft = para.tfn01(freqs) * Vn0_fft + para.tfn12(
+        freqs) * Vn1_fft + para.tfn22(freqs) * Vn2_fft
 
-    P0 = np.fft.irfft(P0_fft) * para.ns
+    I0 = np.fft.irfft(I0_fft) * para.ns
     P1 = np.fft.irfft(P1_fft) * para.ns
     V1 = np.fft.irfft(V1_fft) * para.ns
+    V2 = np.fft.irfft(V2_fft) * para.ns
 
-    init_array = np.empty((N, 3), np.float64)
-    init_array[:, 0] = P0[N:-N]
+    init_array = np.empty((N, 4), np.float64)
+    init_array[:, 0] = I0[N:-N]
     init_array[:, 1] = P1[N:-N]
     init_array[:, 2] = V1[N:-N]
+    init_array[:, 3] = V2[N:-N]
 
     return init_array
 
@@ -160,20 +164,20 @@ sol_g = para_g.simulate(print_time=True)
 sol_e = para_e.simulate(print_time=True)
 (
     t_envelope,
-    P0_g_envelope,
-    V0_g_envelope,
+    I0_g_envelope,
     P1_g_envelope,
     V1_g_envelope,
-) = get_envelopes(sol_g, para_g, Vg)
+    V2_g_envelope,
+) = get_envelopes(sol_g, para_g)
 (
     t_envelope,
-    P0_e_envelope,
-    V0_e_envelope,
+    I0_e_envelope,
     P1_e_envelope,
     V1_e_envelope,
-) = get_envelopes(sol_e, para_e, Vg)
-template_g = V0_g_envelope.copy()
-template_e = V0_e_envelope.copy()
+    V2_e_envelope,
+) = get_envelopes(sol_e, para_e)
+template_g = V2_g_envelope.copy()
+template_e = V2_e_envelope.copy()
 # center_g = np.real(np.sum(np.conj(template_e - template_g) * template_g))
 # center_e = np.real(np.sum(np.conj(template_e - template_g) * template_e))
 # threshold = 0.5 * (center_g + center_e)
@@ -213,13 +217,13 @@ for ii in range(Nruns):
     sol_s = para_s.simulate(init=init_array_s[ii, :])
     (
         t_envelope,
-        P0_s_envelope,
-        V0_s_envelope,
+        I0_s_envelope,
         P1_s_envelope,
         V1_s_envelope,
-    ) = get_envelopes(sol_s, para_s, Vg)
+        V2_s_envelope,
+    ) = get_envelopes(sol_s, para_s)
 
-    signal = V0_s_envelope
+    signal = V2_s_envelope
     decision = np.real(np.sum(np.conj(template_e - template_g) * signal))
     decision_arr[ii] = decision
 
@@ -228,7 +232,8 @@ for ii in range(Nruns):
     dist_g_arr[ii] = dist_g
     dist_e_arr[ii] = dist_e
 
-    if (state and (decision > threshold)) or (not state and (decision < threshold)):
+    if (state and (decision > threshold)) or (not state and
+                                              (decision < threshold)):
         print("    correct: {:.3g}".format(decision))
     else:
         print("*** ERROR: {:.3g} ****************".format(decision))
@@ -237,7 +242,6 @@ for ii in range(Nruns):
     print("    time: {:.2f}s".format(t1 - t0))
 t11 = time.time()
 print("Total time: {:s}".format(sim.format_sec(t11 - t00)))
-
 
 np.savez(
     save_filename,
