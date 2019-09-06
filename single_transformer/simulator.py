@@ -135,23 +135,9 @@ class SimulationParameters(object):
         C1_e *= 1e-9
         R1 *= 1e6
         para_g = cls(
-            L0=L0,
-            Mg=Mg_g,
-            L1=L1_g,
-            C1=C1_g,
-            R1=R1,
-            R0=R0,
-            R2=R2,
-            **kwargs)
+            L0=L0, Mg=Mg_g, L1=L1_g, C1=C1_g, R1=R1, R0=R0, R2=R2, **kwargs)
         para_e = cls(
-            L0=L0,
-            Mg=Mg_e,
-            L1=L1_e,
-            C1=C1_e,
-            R1=R1,
-            R0=R0,
-            R2=R2,
-            **kwargs)
+            L0=L0, Mg=Mg_e, L1=L1_e, C1=C1_e, R1=R1, R0=R0, R2=R2, **kwargs)
 
         return res, para_g, para_e
 
@@ -168,14 +154,7 @@ class SimulationParameters(object):
             R1 *= 1e6
 
             para = cls(
-                L0=L0,
-                Mg=Mg,
-                L1=L1,
-                C1=C1,
-                R1=R1,
-                R0=R0,
-                R2=R2,
-                **kwargs)
+                L0=L0, Mg=Mg, L1=L1, C1=C1, R1=R1, R0=R0, R2=R2, **kwargs)
             my_w0, my_Ql = para.calculate_resonance(verbose=False)
 
             my_Qb = R1 * np.sqrt(C1 / L1)
@@ -214,8 +193,65 @@ class SimulationParameters(object):
         L1 *= 1e-9
         C1 *= 1e-9
         R1 *= 1e6
-        para = cls(
-            L0=L0, Mg=Mg, L1=L1, C1=C1, R1=R1, R0=R0, R2=R2, **kwargs)
+        para = cls(L0=L0, Mg=Mg, L1=L1, C1=C1, R1=R1, R0=R0, R2=R2, **kwargs)
+
+        return res, para
+
+    @classmethod
+    def from_data(cls, freqs, resp, para_0, method='complex', **kwargs):
+        R0 = para_0.R0
+        R2 = para_0.R2
+
+        def erf(p):
+            L0, k, L1, C1, R1, A, phi = p
+            Mg = k * np.sqrt(L0 * L1)
+
+            L0 *= 1e-9
+            Mg *= 1e-9
+            L1 *= 1e-9
+            C1 *= 1e-9
+            R1 *= 1e6
+
+            para = cls(
+                L0=L0, Mg=Mg, L1=L1, C1=C1, R1=R1, R0=R0, R2=R2, **kwargs)
+
+            resp_sim = A * np.exp(1j * phi) * para.tf2(freqs)
+            if method == 'complex':
+                error = resp - resp_sim
+                return np.concatenate((error.real, error.imag))
+            elif method == 'amp':
+                error = np.abs(resp) - np.abs(resp_sim)
+                return error
+            elif method == 'phase':
+                error = np.angle(resp) - np.angle(resp_sim)
+                return error
+            else:
+                raise NotImplementedError(method)
+
+        k_0 = para_0.Mg / np.sqrt(para_0.L0 * para_0.L1)
+        x0 = [
+            1e9 * para_0.L0,
+            k_0,
+            1e9 * para_0.L1,
+            1e9 * para_0.C1,
+            1e-6 * para_0.R1,
+            2.,
+            0.,
+        ]
+        bounds = (
+            [0., -1., 0., 0., 0., 0., -np.pi],
+            [np.inf, 1., np.inf, np.inf, np.inf, np.inf, np.pi],
+        )
+        res = least_squares(erf, x0, bounds=bounds, x_scale='jac')
+
+        L0, k, L1, C1, R1, A, phi = res.x
+        Mg = k * np.sqrt(L0 * L1)
+        L0 *= 1e-9
+        Mg *= 1e-9
+        L1 *= 1e-9
+        C1 *= 1e-9
+        R1 *= 1e6
+        para = cls(L0=L0, Mg=Mg, L1=L1, C1=C1, R1=R1, R0=R0, R2=R2, **kwargs)
 
         return res, para
 
@@ -419,6 +455,15 @@ class SimulationParameters(object):
         self.df = self.dw / (2. * np.pi)
         self.ns = int(round(self.fs / self.df))
         self.T = 1. / self.df
+
+    def set_ns(self, ns):
+        """ Set the number of time samples in one measurement window.
+
+        Args:
+            ns (int)
+        """
+        df = self.fs / ns
+        self.set_df(df)
 
     def _set_drive_frequencies(self, f_arr):
         f_arr = np.atleast_1d(f_arr)

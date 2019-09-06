@@ -27,9 +27,9 @@ res, para = sim.SimulationParameters.from_measurement_single(
 w0, Q = para.calculate_resonance()
 f0 = w0 / (2. * np.pi)
 
-Tnoise0 = Planck * f0 / (2. * Boltzmann)
-Tnoise1 = 0.
-Tnoise2 = 0.
+# Tnoise0 = Planck * f0 / (2. * Boltzmann)
+# Tnoise1 = 0.
+# Tnoise2 = 0.
 
 # Tnoise0 = 0.
 # Tnoise1 = Planck * f0 / (2. * Boltzmann)
@@ -39,9 +39,9 @@ Tnoise2 = 0.
 # Tnoise1 = 0.
 # Tnoise2 = Planck * f0 / (2. * Boltzmann)
 
-# Tnoise0 = Planck * f0 / (2. * Boltzmann)
-# Tnoise1 = Planck * f0 / (2. * Boltzmann)
-# Tnoise2 = Planck * f0 / (2. * Boltzmann)
+Tnoise0 = Planck * f0 / (2. * Boltzmann)
+Tnoise1 = Planck * f0 / (2. * Boltzmann)
+Tnoise2 = Planck * f0 / (2. * Boltzmann)
 
 
 df_ = f0 / Q / 10.  # Hz

@@ -11,11 +11,10 @@ Nruns = 65536 // 4
 
 _wc = 2. * np.pi * 6e9
 _chi = 2. * np.pi * 2e6
-# _Qb = 10e6
+_Qb = 1e7
 _kappa = _chi / 10
 _Ql = _wc / _kappa
-_Qb = _Ql * 100
-AMP = 2.261e-6  # V
+AMP = 2.266e-6  # V
 save_filename = "fidelity_chi_{:.0g}_kappa_{:.0g}_Nruns_{:d}_4.npz".format(
     _chi / (2. * np.pi),
     _kappa / (2. * np.pi),
@@ -66,7 +65,7 @@ def get_envelopes(sol, para):
     I0 = sol[:, 0]
     P1 = sol[:, 1]
     V1 = sol[:, 2]
-    V2 = sol[:, 3]
+    V2 = para.calculate_V2(I0)
 
     Nimps = 31
     Npoints = 1000
@@ -127,19 +126,15 @@ def get_init_array(para, N):
         freqs) * Vn1_fft + para.tfn2P1(freqs) * Vn2_fft
     V1_fft = para.tfn01(freqs) * Vn0_fft + para.tfn11(
         freqs) * Vn1_fft + para.tfn21(freqs) * Vn2_fft
-    V2_fft = para.tfn02(freqs) * Vn0_fft + para.tfn12(
-        freqs) * Vn1_fft + para.tfn22(freqs) * Vn2_fft
 
     I0 = np.fft.irfft(I0_fft) * para.ns
     P1 = np.fft.irfft(P1_fft) * para.ns
     V1 = np.fft.irfft(V1_fft) * para.ns
-    V2 = np.fft.irfft(V2_fft) * para.ns
 
-    init_array = np.empty((N, 4), np.float64)
+    init_array = np.empty((N, 3), np.float64)
     init_array[:, 0] = I0[N:-N]
     init_array[:, 1] = P1[N:-N]
     init_array[:, 2] = V1[N:-N]
-    init_array[:, 3] = V2[N:-N]
 
     return init_array
 

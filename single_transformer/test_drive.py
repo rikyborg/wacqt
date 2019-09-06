@@ -13,7 +13,7 @@ _Qb = 1e7
 _kappa = _chi / 10.
 _Ql = _wc / _kappa
 # _Qb = 100 * _Ql
-AMP = 2.272e-6  # V
+AMP = 2.266e-6  # V
 
 res, para_g, para_e = sim.SimulationParameters.from_measurement(_wc, _chi, _Qb, _Ql)
 # res, para_g = sim.SimulationParameters.from_measurement_single(_wc - _chi, _Qb, _Ql)
@@ -60,6 +60,13 @@ carrier = AMP * np.cos(2. * np.pi * fc * t_drive)
 window = np.zeros_like(t_drive)
 idx = np.s_[0 * para_g.ns:2 * para_g.ns]
 window[idx] = np.sin(2. * np.pi * 0.5 * df * t_drive[idx])**2
+# _x = t_drive[idx] - t_drive[idx][0]
+# _x /= _x[-1] + _x[1]
+# _x *= 2
+# _x = np.mod(_x, 1.)
+# _x -= 0.5
+# _x *= 2
+# window[idx] = np.exp(1 - 1 / (1 - _x**2))
 drive = window * carrier
 
 para_g.set_drive_V(drive)
