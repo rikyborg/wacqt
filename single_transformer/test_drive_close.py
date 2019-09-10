@@ -7,23 +7,27 @@ from scipy.signal import decimate
 
 import simulator as sim
 
-# _wc = 2. * np.pi * 6e9
-# _kappa = 2. * np.pi * 200e3
-# _Qb = 1e7
-# _chi = _kappa / 1.
-# _Ql = _wc / _kappa
-_wc = 2. * np.pi * 6.0296e9
-_kappa = 2. * np.pi * 517e3
+_wc = 2. * np.pi * 6e9
+_kappa = 2. * np.pi * 200e3
 _Qb = 1e7
-_chi = - 2. * np.pi * 143e3
+_chi = _kappa / 1.
 _Ql = _wc / _kappa
+# _wc = 2. * np.pi * 6.0296e9
+# _kappa = 2. * np.pi * 517e3
+# _Qb = 1e7
+# _chi = -2. * np.pi * 143e3
+# _Ql = _wc / _kappa
 _AMP = 1e-6  # V, will be adjusted later to reach max_ph
-# max_ph = 227
-max_ph = None
+max_ph = 227
+# max_ph = None
 max_int_ph = 1.95e-4
 detuning = 10.
-double = False
-triangle = True
+double = True
+# method = "sine"
+# method = "triangle"
+# method = "smart"
+# method = "stupid"
+method = "crazy"
 nr_freqs = 4
 
 res, para_g, para_e = sim.SimulationParameters.from_measurement(
@@ -62,8 +66,8 @@ para_e.set_df(df)
 # para_e.simulate(print_time=True)
 
 # readout run
-para_g.set_Nbeats(4)
-para_e.set_Nbeats(4)
+para_g.set_Nbeats(10)
+para_e.set_Nbeats(10)
 para_g.set_noise_T(T1=Tph, T0=T0)
 para_e.set_noise_T(T1=Tph, T0=T0)
 
@@ -96,20 +100,124 @@ for ii in range(3):
     carrier = AMP * np.cos(2. * np.pi * fc * t_drive)
     window = np.zeros_like(t_drive)
     idx = np.s_[0 * para_g.ns:2 * para_g.ns]
-    if triangle:
+
+    if method == "triangle":
         x = df
         window[:para_g.ns] = np.linspace(0, 1, para_g.ns, endpoint=False)
-        window[para_g.ns:2 * para_g.ns] = np.linspace(1, 0, para_g.ns, endpoint=False)
+        window[para_g.ns:2 * para_g.ns] = np.linspace(
+            1, 0, para_g.ns, endpoint=False)
         carrier1 = 0.5 * AMP * np.cos(2. * np.pi * (fc - x) * t_drive)
-        carrier2 = 0.5 * AMP * np.cos(2. * np.pi * (fc + x) * t_drive)
-        carrier = carrier1 - carrier2
-    else:
+        carrier2 = 0.5 * AMP * np.cos(2. * np.pi * (fc + x) * t_drive + np.pi)
+        carrier = carrier1 + carrier2
+        drive = window * carrier
+
+    elif method == "sine":
         if double:
             w_m = 2 * np.pi * df / 2
         else:
             w_m = 2 * np.pi * df / 4
         window[idx] = np.sin(w_m * t_drive[idx])**(nr_freqs - 1)
-    drive = window * carrier
+        drive = window * carrier
+
+    elif method == "smart":
+        wc = 2 * np.pi * fc
+        fm = df / 2
+        wm = 2 * np.pi * fm
+        # carrier = np.cos(wc * t_drive)
+        mask0 = np.zeros_like(t_drive)
+        T0, T1 = 0., 0.5 / fm
+        mask0[np.logical_and(t_drive >= T0, t_drive < T1)] = 1.
+        s0 = np.sin(wm * t_drive)**3 * carrier
+        s0 *= mask0
+        s0_fft = np.fft.rfft(s0)
+
+        fmz = 1 * fm
+        wmz = 2 * np.pi * fmz
+        T2 = T1 + 0.5 / fmz
+        maskz = np.zeros_like(t_drive)
+        maskz[np.logical_and(t_drive >= T1, t_drive < T2)] = 1.
+
+        # s2 = np.sin(wmz * t_drive)**2 * carrier
+        # s2 = carrier
+        # s2 *= maskz
+        # s2_fft = np.fft.rfft(s2)
+        # idx_c = int(round(fc / df * para_g.Nbeats))
+        # Asmart = - s1_fft[idx_c] / s2_fft[idx_c]
+        # s0_fft = s1_fft + Asmart * s2_fft
+
+        carrier1 = np.cos(2. * np.pi * fc * t_drive)
+        s1 = np.sin(wmz * t_drive)**1 * carrier1
+        s1 *= maskz
+        s1_fft = np.fft.rfft(s1)
+
+        fg = w_g / 2 / np.pi
+        carrier2 = np.cos(2. * np.pi * fg * t_drive)
+        s2 = np.sin(wmz * t_drive)**1 * carrier2
+        s2 *= maskz
+        s2_fft = np.fft.rfft(s2)
+
+        fe = w_e / 2 / np.pi
+        carrier3 = np.cos(2. * np.pi * fe * t_drive)
+        s3 = np.sin(wmz * t_drive)**1 * carrier3
+        s3 *= maskz
+        s3_fft = np.fft.rfft(s3)
+
+        # idx_g = int(round(fg / df * para_g.Nbeats))
+        # idx_e = int(round(fe / df * para_g.Nbeats))
+        # s1g, s2g, s3g = s1_fft[idx_g], s2_fft[idx_g], s3_fft[idx_g]
+        # s1e, s2e, s3e = s1_fft[idx_e], s2_fft[idx_e], s3_fft[idx_e]
+        idx_c = int(round(fc / df * para_g.Nbeats))
+
+        s0, s1, s2 = s0_fft[idx_c], np.gradient(s0_fft)[idx_c], np.gradient(
+            np.gradient(s0_fft))[idx_c]
+        p10, p11, p12 = s1_fft[idx_c], np.gradient(s1_fft)[idx_c], np.gradient(
+            np.gradient(s1_fft))[idx_c]
+        p20, p21, p22 = s2_fft[idx_c], np.gradient(s2_fft)[idx_c], np.gradient(
+            np.gradient(s2_fft))[idx_c]
+        p30, p31, p32 = s3_fft[idx_c], np.gradient(s3_fft)[idx_c], np.gradient(
+            np.gradient(s3_fft))[idx_c]
+        a1 = (-s0 * (p21 * p32 - p22 * p31) + s1 *
+              (p20 * p32 - p22 * p30) - s2 * (p20 * p31 - p21 * p30)) / (
+                  p10 * p21 * p32 - p10 * p22 * p31 - p11 * p20 * p32 +
+                  p11 * p22 * p30 + p12 * p20 * p31 - p12 * p21 * p30)
+        a2 = (s0 * (p11 * p32 - p12 * p31) - s1 *
+              (p10 * p32 - p12 * p30) + s2 * (p10 * p31 - p11 * p30)) / (
+                  p10 * p21 * p32 - p10 * p22 * p31 - p11 * p20 * p32 +
+                  p11 * p22 * p30 + p12 * p20 * p31 - p12 * p21 * p30)
+        a3 = (-s0 * (p11 * p22 - p12 * p21) + s1 *
+              (p10 * p22 - p12 * p20) - s2 * (p10 * p21 - p11 * p20)) / (
+                  p10 * p21 * p32 - p10 * p22 * p31 - p11 * p20 * p32 +
+                  p11 * p22 * p30 + p12 * p20 * p31 - p12 * p21 * p30)
+
+        final_fft = s0_fft + a1 * s1_fft + a2 * s2_fft + a3 * s3_fft
+        final_fft = s0_fft
+
+        drive = np.fft.irfft(final_fft, n=len(carrier))
+
+    elif method == 'stupid':
+        w_m = 2 * np.pi * df / 4
+        window[idx] = np.sin(w_m * t_drive[idx])**(nr_freqs - 1)
+        drive = window * carrier
+        drive_fft = np.fft.rfft(drive)
+        idx_c = int(round(fc / df * para_g.Nbeats))
+        xx = np.arange(len(drive_fft))
+        mask = 1 - np.exp(-0.5 * ((xx - idx_c) / 3)**2)
+        drive_fft *= mask
+        drive = np.fft.irfft(drive_fft, n=len(drive))
+
+    elif method == "crazy":
+        x = df / 2
+        wm = 2 * np.pi * x
+        carrier1 = 0.5 * AMP * np.cos(2. * np.pi * (fc - x) * t_drive)
+        carrier2 = 0.5 * AMP * np.cos(2. * np.pi * (fc + x) * t_drive)
+        drive1 = np.sin(wm * t_drive)**2 * carrier1
+        drive2 = np.sin(wm * t_drive)**2 * carrier2
+        window = np.zeros_like(t_drive)
+        window[:2 * para_g.ns] = 1.
+        drive = window * (drive1 + drive2)
+
+    else:
+        raise NotImplementedError
 
     para_g.set_drive_V(drive)
     para_e.set_drive_V(drive)
@@ -145,8 +253,10 @@ for ii in range(3):
     idx_check = np.argmin(np.abs(t_envelope - t[idx.stop]))
     left_ph_g = nr_ph_g[idx_check]
     left_ph_e = nr_ph_e[idx_check]
-    int_ph_g = np.trapz(nr_ph_g[:idx_check], t_envelope[:idx_check]) + left_ph_g / kappa_g
-    int_ph_e = np.trapz(nr_ph_e[:idx_check], t_envelope[:idx_check]) + left_ph_e / kappa_e
+    int_ph_g = np.trapz(nr_ph_g[:idx_check],
+                        t_envelope[:idx_check]) + left_ph_g / kappa_g
+    int_ph_e = np.trapz(nr_ph_e[:idx_check],
+                        t_envelope[:idx_check]) + left_ph_e / kappa_e
 
     if max_ph is None:
         _AMP = AMP * np.sqrt(max_int_ph / max(int_ph_g, int_ph_e))
@@ -159,7 +269,8 @@ print("Integral: {:.3g} ph s".format(max(int_ph_g, int_ph_e)))
 print("Photons left: {:.2g}".format(max(left_ph_g, left_ph_e)))
 time_to_half_g = 1 / kappa_g * np.log(2 * left_ph_g)
 time_to_half_e = 1 / kappa_e * np.log(2 * left_ph_e)
-print("Time to half photon: {:.2g}".format(max(time_to_half_g, time_to_half_e)))
+print("Time to half photon: {:.2g}".format(
+    max(time_to_half_g, time_to_half_e)))
 
 distance = np.abs(V2_e_envelope - V2_g_envelope)
 
