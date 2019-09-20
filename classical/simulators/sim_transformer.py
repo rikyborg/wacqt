@@ -11,9 +11,12 @@ import numpy.ctypeslib as npct
 from scipy.constants import Boltzmann
 from scipy.optimize import least_squares, minimize
 
+CONF = "transformer"
+
 ID_NOT_SET = -1
 
 NEQ = 3
+NNOISE = 3
 
 ID_LINEAR = 0
 ID_DUFFING = 1
@@ -45,7 +48,6 @@ class SimulationParameters(object):
     Attributes:
         para (_SimPara): the C structure to be passed to the cvode simulator.
     """
-
     @classmethod
     def from_measurement(cls, wc, chi, Qb, Ql, R0=50., R2=50., **kwargs):
         def erf(p):
@@ -278,6 +280,20 @@ class SimulationParameters(object):
             R2 (float, optional): output transmission line impedance in ohm (Omega)
             fs (float, optional): sampling frequency in hertz (Hz)
         """
+        self.state_variables_latex = [r'$I_0$', r'$\Phi_1$', r'$V_1$']
+        self.state_variables_tfs = [self.tfI0, self.tfP1, self.tf1]
+        self.state_variables_ntfs = [
+            [self.tfn0I0, self.tfn1I0, self.tfn2I0],
+            [self.tfn0P1, self.tfn1P1, self.tfn2P1],
+            [self.tfn01, self.tfn11, self.tfn21],
+        ]
+        self.output_tfs = self.tf2
+        self.output_ntfs = [self.tfn02, self.tfn12, self.tfn22]
+
+        self.NEQ = NEQ
+        self.NNOISE = NNOISE
+        self.CONF = CONF
+
         self.L0 = L0
         self.Mg = Mg
         self.L1 = L1
@@ -927,6 +943,10 @@ class SimulationParameters(object):
                 Vn2 = 0.
         return self.R2 * I0 + Vn2
 
+    def calculate_Vout(self, sol):
+        I0 = sol[:, 0]
+        return self.calculate_V2(I0)
+
     def get_tf_den_coeff(self):
         r0 = self.R0
         l0 = self.L0
@@ -998,6 +1018,27 @@ class SimulationParameters(object):
         n0 = 0.
         n1 = mG * r1
         num = np.polyval([n1, n0], s)
+
+        den = np.polyval(self.get_tf_den_coeff(), s)
+
+        return num / den
+
+    def tfP1(self, f):
+        """ Linear response function from the drive voltage V_G to the flux
+        on the oscillator P_1.
+
+        Args:
+            f (float or np.ndarray): frequency in hertz (Hz)
+
+        Returns:
+            (float or np.ndarray)
+        """
+        s = 1j * 2. * np.pi * f
+        mG = self.Mg
+        r1 = self.R1
+
+        n0 = mG * r1
+        num = np.polyval([n0], s)
 
         den = np.polyval(self.get_tf_den_coeff(), s)
 
@@ -1254,7 +1295,7 @@ elif sys.platform == 'darwin':
     my_ext = '.bundle'
 elif sys.platform.startswith('linux'):
     my_ext = '.so'
-load_path = os.path.join(curr_folder, "sim_cvode" + my_ext)
+load_path = os.path.join(curr_folder, "cvode_transformer" + my_ext)
 c_lib = ctypes.cdll.LoadLibrary(load_path)
 c_lib.integrate_cvode.restype = ctypes.c_int
 c_lib.integrate_cvode.argtypes = [
