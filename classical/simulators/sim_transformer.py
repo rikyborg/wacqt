@@ -48,6 +48,7 @@ class SimulationParameters(object):
     Attributes:
         para (_SimPara): the C structure to be passed to the cvode simulator.
     """
+
     @classmethod
     def from_measurement(cls, wc, chi, Qb, Ql, R0=50., R2=50., **kwargs):
         def erf(p):
@@ -281,14 +282,6 @@ class SimulationParameters(object):
             fs (float, optional): sampling frequency in hertz (Hz)
         """
         self.state_variables_latex = [r'$I_0$', r'$\Phi_1$', r'$V_1$']
-        self.state_variables_tfs = [self.tfI0, self.tfP1, self.tf1]
-        self.state_variables_ntfs = [
-            [self.tfn0I0, self.tfn1I0, self.tfn2I0],
-            [self.tfn0P1, self.tfn1P1, self.tfn2P1],
-            [self.tfn01, self.tfn11, self.tfn21],
-        ]
-        self.output_tfs = self.tf2
-        self.output_ntfs = [self.tfn02, self.tfn12, self.tfn22]
 
         self.NEQ = NEQ
         self.NNOISE = NNOISE
@@ -962,6 +955,22 @@ class SimulationParameters(object):
         d3 = c1 * (l0 * l1 - mG**2) * r1
 
         return [d3, d2, d1, d0]
+
+    def state_variable_tf(self, f, state_variable_idx):
+        return [self.tfI0, self.tfP1, self.tf1][state_variable_idx](f)
+
+    def state_variable_ntf(self, f, state_variable_idx, noise_idx):
+        return [
+            [self.tfn0I0, self.tfn1I0, self.tfn2I0],
+            [self.tfn0P1, self.tfn1P1, self.tfn2P1],
+            [self.tfn01, self.tfn11, self.tfn21],
+        ][state_variable_idx][noise_idx](f)
+
+    def output_tf(self, f):
+        return self.tf2(f)
+
+    def output_ntf(self, f, noise_idx):
+        return [self.tfn02, self.tfn12, self.tfn22][noise_idx](f)
 
     def tfI0(self, f):
         """ Linear response function from the drive voltage V_G to the current

@@ -208,7 +208,7 @@ static int ode_linear(realtype t, N_Vector y, N_Vector ydot, void* user_data) {
 
         NV_Ith_S(ydot, 0) += para->b[0] * Vn0;
         NV_Ith_S(ydot, 0) += -para->b[0] * Vn2;
-        NV_Ith_S(ydot, 2) += para->a[2][2] * Vn1;
+        NV_Ith_S(ydot, 2) += -para->a[2][2] * Vn1;
     }
 
     return(0);

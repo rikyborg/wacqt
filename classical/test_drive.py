@@ -6,10 +6,10 @@ from scipy.constants import hbar, Boltzmann
 
 from utils import demodulate, demodulate_time
 
-# from simulators import sim_transformer as sim
+from simulators import sim_transformer as sim
 # from simulators import sim_notch as sim
 # from simulators import sim_reflection as sim
-from simulators import sim_transmission as sim
+# from simulators import sim_transmission as sim
 
 _wc = 2. * np.pi * 6e9
 _chi = 2. * np.pi * 2e6

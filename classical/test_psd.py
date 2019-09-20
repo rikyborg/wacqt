@@ -31,16 +31,14 @@ if sim.NNOISE == 3:
     kwargs['R2'] = 25.
 res, para = sim.SimulationParameters.from_measurement_single(**kwargs)
 assert res.success
-para.para.stiff_equation = False
+
 w0, Q = para.calculate_resonance()
 f0 = w0 / (2. * np.pi)
 
 Tph = Planck * f0 / (2. * Boltzmann)
-# noise_kwargs = {'T0': Tph, 'T1': Tph}
-noise_kwargs = {'T0': 0., 'T1': 0.}
+noise_kwargs = {'T0': Tph, 'T1': Tph}
 if sim.NNOISE == 3:
     noise_kwargs['T2'] = Tph
-    # noise_kwargs['T2'] = 0.
 
 df_ = f0 / Q / 10.  # Hz
 _, df = para.tune(0., df_, regular=True)
@@ -65,7 +63,11 @@ t0 = time.time()
 for ii in range(Navg):
     print(ii)
     if FAST:
-        sol = get_init_array(para, para.ns)
+        sol, noise = get_init_array(para, para.ns, return_noise=True)
+        para.noise0_array[:para.ns] = noise[0, :]
+        para.noise1_array[:para.ns] = noise[1, :]
+        if para.NNOISE == 3:
+            para.noise2_array[:para.ns] = noise[2, :]
     else:
         # regenerate noise
         para.set_noise_T(**noise_kwargs)
@@ -109,9 +111,9 @@ theo_out = np.zeros(len(freqs))
 for ii in range(sim.NEQ):
     for jj in range(sim.NNOISE):
         theo[ii, :] += sigmas[jj] * np.abs(
-            para.state_variables_ntfs[ii][jj](freqs))**2
+            para.state_variable_ntf(freqs, ii, jj))**2
 for jj in range(sim.NNOISE):
-    theo_out[:] += sigmas[jj] * np.abs(para.output_ntfs[jj](freqs))**2
+    theo_out[:] += sigmas[jj] * np.abs(para.output_ntf(freqs, jj))**2
 
 fig, ax = plt.subplots(tight_layout=True)
 for jj in range(sim.NEQ):

@@ -5,11 +5,14 @@ import time
 import numpy as np
 from scipy.constants import hbar, Boltzmann
 
-from utils import demodulate, demodulate_time
+from utils import demodulate, demodulate_time, get_init_array
 
 from simulators import sim_transformer as sim
+# from simulators import sim_notch as sim
+# from simulators import sim_reflection as sim
+# from simulators import sim_transmission as sim
 
-Nruns = 65536 // 4
+Nruns = 65536
 
 _wc = 2. * np.pi * 6e9
 _chi = 2. * np.pi * 2e6
@@ -90,36 +93,6 @@ def get_envelopes(sol, para, fc):
     Vout_envelope = demodulate(Vout, nc * Nbeats)
 
     return (t_envelope, Vout_envelope)
-
-
-def get_init_array(para, N):
-    ns = 3 * N
-    freqs = np.fft.rfftfreq(ns, para.dt)
-
-    PSD_twosided = []
-    PSD_twosided.append(2. * Boltzmann * para.noise_T0 * para.R0)
-    PSD_twosided.append(2. * Boltzmann * para.noise_T1 * para.R1)
-    if sim.NNOISE == 3:
-        PSD_twosided.append(2. * Boltzmann * para.noise_T2 * para.R2)
-
-    Vn = np.empty((sim.NNOISE, ns), np.float64)
-    for ii in range(sim.NNOISE):
-        Vn[ii] = np.sqrt(PSD_twosided[ii]) * np.sqrt(para.fs) * np.random.randn(ns)
-
-    Vn_fft = np.fft.rfft(Vn, axis=-1) / ns
-
-    state_var_fft = np.zeros((sim.NEQ, len(Vn_fft)))
-    for ii in range(sim.NEQ):
-        for jj in range(sim.NNOISE):
-            state_var_fft[ii, :] += para.state_variables_ntfs[ii][jj](freqs) * Vn_fft[jj]
-
-    state_var = np.fft.irfft(state_var_fft, axis=-1) * para.ns
-
-    init_array = np.empty((N, sim.NEQ), np.float64)
-    for ii in range(sim.NEQ):
-        init_array[:, ii] = state_var[ii, N:-N]
-
-    return init_array
 
 
 # templates

@@ -6,10 +6,10 @@ from matplotlib import rcParams
 import matplotlib.pyplot as plt
 import numpy as np
 
-# from simulators import sim_transformer as sim
+from simulators import sim_transformer as sim
 # from simulators import sim_notch as sim
 # from simulators import sim_reflection as sim
-from simulators import sim_transmission as sim
+# from simulators import sim_transmission as sim
 
 # Change default font size for nicer plots
 rcParams['figure.titlesize'] = 'large'
@@ -19,12 +19,6 @@ rcParams['legend.fontsize'] = 'large'
 rcParams['xtick.labelsize'] = 'large'
 rcParams['ytick.labelsize'] = 'large'
 
-# para = sim.SimulationParameters(
-#     Lg=1e-12,
-#     R1=1000., L1=1e-9 / (2. * np.pi), C1=1e-9 / (2. * np.pi),
-#     R0=50., R2=50.,
-#     fs=3e9,
-# )
 _, para = sim.SimulationParameters.from_measurement_single(2. * np.pi * 1e9, 1e4, 1e2, fs=20e9)
 df = 1e6  # Hz
 
@@ -79,7 +73,7 @@ resp_array *= 2. / (AMP * np.exp(1j * PHASE))
 f_plot = np.linspace(fstart, fstop, 20001)
 transfer_function = np.zeros((sim.NEQ, len(f_plot)), np.complex128)
 for ii in range(sim.NEQ):
-    transfer_function[ii, :] = para.state_variables_tfs[ii](f_plot)
+    transfer_function[ii, :] = para.state_variable_tf(f_plot, ii)
 
 
 fig, ax = plt.subplots(2, sim.NEQ, sharex=True, tight_layout=True)

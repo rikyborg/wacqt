@@ -161,14 +161,6 @@ class SimulationParameters(object):
             fs (float, optional): sampling frequency in hertz (Hz)
         """
         self.state_variables_latex = [r'$V_0$', r'$\Phi_1$', r'$V_1$']
-        self.state_variables_tfs = [self.tf0, self.tfP1, self.tf1]
-        self.state_variables_ntfs = [
-            [self.tfn00, self.tfn10],
-            [self.tfn0P1, self.tfn1P1],
-            [self.tfn01, self.tfn11],
-        ]
-        self.output_tfs = self.tfr
-        self.output_ntfs = [self.tfn00, self.tfn10]
 
         self.NEQ = NEQ
         self.NNOISE = NNOISE
@@ -803,6 +795,22 @@ class SimulationParameters(object):
         d3 = c1 * cL * l1 * r0 * r1
 
         return [d3, d2, d1, d0]
+
+    def state_variable_tf(self, f, state_variable_idx):
+        return [self.tf0, self.tfP1, self.tf1][state_variable_idx](f)
+
+    def state_variable_ntf(self, f, state_variable_idx, noise_idx):
+        return [
+            [self.tfn00, self.tfn10],
+            [self.tfn0P1, self.tfn1P1],
+            [self.tfn01, self.tfn11],
+        ][state_variable_idx][noise_idx](f)
+
+    def output_tf(self, f):
+        return self.tfr(f)
+
+    def output_ntf(self, f, noise_idx):
+        return [self.tfn00, self.tfn10][noise_idx](f)
 
     def tf0(self, f):
         """ Linear response function from the drive voltage V_G to the voltage

@@ -211,7 +211,8 @@ class SimulationParameters(object):
             _, my_Qc = para_c.calculate_resonance()
 
             # with Cr (both in and out) should be kappa
-            para = cls(Cl=Cl, Cr=Cr, R1=R1, L1=L1, C1=C1, R0=R0, R2=R2, **kwargs)
+            para = cls(
+                Cl=Cl, Cr=Cr, R1=R1, L1=L1, C1=C1, R0=R0, R2=R2, **kwargs)
             my_w0, my_Ql = para.calculate_resonance()
 
             my_Qb = R1 * np.sqrt(C1 / L1)
@@ -225,8 +226,11 @@ class SimulationParameters(object):
             return logerr
 
         x0 = [
-            1. / w0 / 1e3 * 1e9, 1. / w0 / 1e1 * 1e9, Qb / 1e6,
-            1. / w0 * 1e9, 1. / w0 * 1e9,
+            1. / w0 / 1e3 * 1e9,
+            1. / w0 / 1e1 * 1e9,
+            Qb / 1e6,
+            1. / w0 * 1e9,
+            1. / w0 * 1e9,
         ]
         bounds = (1e-6, np.inf)
         res = least_squares(erf, x0, bounds=bounds)
@@ -267,15 +271,6 @@ class SimulationParameters(object):
         self.state_variables_latex = [
             r'$V_0$', r'$\Phi_1$', r'$V_1$', r'$V_2$'
         ]
-        self.state_variables_tfs = [self.tf0, self.tfP1, self.tf1, self.tf2]
-        self.state_variables_ntfs = [
-            [self.tfn00, self.tfn10, self.tfn20],
-            [self.tfn0P1, self.tfn1P1, self.tfn2P1],
-            [self.tfn01, self.tfn11, self.tfn21],
-            [self.tfn02, self.tfn12, self.tfn22],
-        ]
-        self.output_tfs = self.tf2
-        self.output_ntfs = [self.tfn02, self.tfn12, self.tfn22]
 
         self.NEQ = NEQ
         self.NNOISE = NNOISE
@@ -935,6 +930,23 @@ class SimulationParameters(object):
     def calculate_Vout(self, sol):
         V2 = sol[:, 3]
         return V2
+
+    def state_variable_tf(self, f, state_variable_idx):
+        return [self.tf0, self.tfP1, self.tf1, self.tf2][state_variable_idx](f)
+
+    def state_variable_ntf(self, f, state_variable_idx, noise_idx):
+        return [
+            [self.tfn00, self.tfn10, self.tfn20],
+            [self.tfn0P1, self.tfn1P1, self.tfn2P1],
+            [self.tfn01, self.tfn11, self.tfn21],
+            [self.tfn02, self.tfn12, self.tfn22],
+        ][state_variable_idx][noise_idx](f)
+
+    def output_tf(self, f):
+        return self.tf2(f)
+
+    def output_ntf(self, f, noise_idx):
+        return [self.tfn02, self.tfn12, self.tfn22][noise_idx](f)
 
     def tf0(self, f):
         """ Linear response function from the drive voltage V_G to the voltage
