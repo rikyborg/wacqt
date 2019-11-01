@@ -231,7 +231,7 @@ xx = np.tile(tlist, Ntraj)
 yy = ssz.flatten()
 fig3, ax3 = plt.subplots(tight_layout=True)
 h, xedges, yedges, im3 = ax3.hist2d(
-    xx, yy, bins=len(tlist), density=True, norm=LogNorm())
+    xx, yy, bins=len(tlist), normed=True, norm=LogNorm())
 ax3.set_ylim(-1.1, 1.1)
 fig3.colorbar(im3)
 fig3.show()
