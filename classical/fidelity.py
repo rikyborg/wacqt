@@ -31,6 +31,7 @@ save_filename = "fidelity_{:s}_chi_{:.0g}_kappa_{:.0g}_Nruns_{:d}.npz".format(
     _kappa / (2. * np.pi),
     Nruns,
 )
+print("Saving to: {:s}".format(save_filename))
 
 res, para_g, para_e = sim.SimulationParameters.from_measurement(
     _wc, _chi, _Qb, _Ql)

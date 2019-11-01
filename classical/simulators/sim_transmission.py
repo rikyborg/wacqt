@@ -44,82 +44,7 @@ class SimulationParameters(object):
     """
 
     @classmethod
-    def from_measurement(cls, wc, chi, Qb, Ql):
-        R0 = 50.
-        R2 = 50.
-
-        def erf(p):
-            Cl, R1, C1_g, L1_g, C1_e, L1_e = p
-
-            Cl *= 1e-9
-            R1 *= 1e6
-            C1_g *= 1e-9
-            L1_g *= 1e-9
-            C1_e *= 1e-9
-            L1_e *= 1e-9
-
-            # use same input and output capacitor
-            Cr = Cl
-
-            para_g = cls(Cl=Cl, Cr=Cr, R1=R1, L1=L1_g, C1=C1_g, R0=R0, R2=R2)
-            my_w0_g, my_Ql_g = para_g.calculate_resonance()
-
-            para_e = cls(Cl=Cl, Cr=Cr, R1=R1, L1=L1_e, C1=C1_e, R0=R0, R2=R2)
-            my_w0_e, my_Ql_e = para_e.calculate_resonance()
-
-            my_Qb_g = R1 * np.sqrt(C1_g / L1_g)
-            my_Qb_e = R1 * np.sqrt(C1_e / L1_e)
-
-            my_wc = 0.5 * (my_w0_g + my_w0_e)
-            my_chi = 0.5 * np.abs(my_w0_g - my_w0_e)
-
-            # relerr = np.array([
-            #     (my_wc - wc) / wc,
-            #     (my_chi - chi) / chi,
-            #     (my_Ql_g - Ql) / Ql,
-            #     (my_Ql_e - Ql) / Ql,
-            #     (my_Qb_g - Qb) / Qb,
-            #     (my_Qb_e - Qb) / Qb,
-            # ])
-            # return np.sum(relerr**2)
-            logerr = np.array([
-                np.log(np.abs(my_wc / wc)),
-                np.log(np.abs(my_chi / chi)),
-                np.log(np.abs(my_Ql_g / Ql)),
-                np.log(np.abs(my_Ql_e / Ql)),
-                np.log(np.abs(my_Qb_g / Qb)),
-                np.log(np.abs(my_Qb_e / Qb)),
-            ])
-            return logerr
-
-        x0 = [
-            1. / wc / 1e1 * 1e9, Qb / 1e6, 1. / (wc + chi) * 1e9,
-            1. / (wc + chi) * 1e9, 1. / (wc - chi) * 1e9, 1. / (wc - chi) * 1e9
-        ]
-        bounds = (1e-6, np.inf)
-        res = least_squares(erf, x0, bounds=bounds)
-
-        Cl, R1, C1_g, L1_g, C1_e, L1_e = res.x
-        Cl *= 1e-9
-        R1 *= 1e6
-        C1_g *= 1e-9
-        L1_g *= 1e-9
-        C1_e *= 1e-9
-        L1_e *= 1e-9
-
-        # use same input and output capacitor
-        Cr = Cl
-
-        para_g = cls(Cl=Cl, Cr=Cr, R1=R1, L1=L1_g, C1=C1_g, R0=R0, R2=R2)
-        para_e = cls(Cl=Cl, Cr=Cr, R1=R1, L1=L1_e, C1=C1_e, R0=R0, R2=R2)
-
-        return res, para_g, para_e
-
-    @classmethod
-    def from_measurement_crit_in(cls, wc, chi, Qb, Ql):
-        R0 = 50.
-        R2 = 50.
-
+    def from_measurement(cls, wc, chi, Qb, Ql, R0=50., R2=50., **kwargs):
         def erf(p):
             Cl, Cr, R1, C1_g, L1_g, C1_e, L1_e = p
 
@@ -132,17 +57,17 @@ class SimulationParameters(object):
             L1_e *= 1e-9
 
             # with Cr=0 (only input) should be critically coupled Qc = Qb / 2.
-            para_c_g = cls(Cl=Cl, Cr=0., R1=R1, L1=L1_g, C1=C1_g, R0=R0, R2=R2)
+            para_c_g = cls(Cl=Cl, Cr=0., R1=R1, L1=L1_g, C1=C1_g, R0=R0, R2=R2, **kwargs)
             _, my_Qc_g = para_c_g.calculate_resonance()
 
-            para_c_e = cls(Cl=Cl, Cr=0., R1=R1, L1=L1_e, C1=C1_e, R0=R0, R2=R2)
+            para_c_e = cls(Cl=Cl, Cr=0., R1=R1, L1=L1_e, C1=C1_e, R0=R0, R2=R2, **kwargs)
             _, my_Qc_e = para_c_e.calculate_resonance()
 
             # with Cr (both in and out) should be kappa
-            para_g = cls(Cl=Cl, Cr=Cr, R1=R1, L1=L1_g, C1=C1_g, R0=R0, R2=R2)
+            para_g = cls(Cl=Cl, Cr=Cr, R1=R1, L1=L1_g, C1=C1_g, R0=R0, R2=R2, **kwargs)
             my_w0_g, my_Ql_g = para_g.calculate_resonance()
 
-            para_e = cls(Cl=Cl, Cr=Cr, R1=R1, L1=L1_e, C1=C1_e, R0=R0, R2=R2)
+            para_e = cls(Cl=Cl, Cr=Cr, R1=R1, L1=L1_e, C1=C1_e, R0=R0, R2=R2, **kwargs)
             my_w0_e, my_Ql_e = para_e.calculate_resonance()
 
             my_Qb_g = R1 * np.sqrt(C1_g / L1_g)
@@ -151,15 +76,6 @@ class SimulationParameters(object):
             my_wc = 0.5 * (my_w0_g + my_w0_e)
             my_chi = 0.5 * np.abs(my_w0_g - my_w0_e)
 
-            # relerr = np.array([
-            #     (my_wc - wc) / wc,
-            #     (my_chi - chi) / chi,
-            #     (my_Ql_g - Ql) / Ql,
-            #     (my_Ql_e - Ql) / Ql,
-            #     (my_Qb_g - Qb) / Qb,
-            #     (my_Qb_e - Qb) / Qb,
-            # ])
-            # return np.sum(relerr**2)
             logerr = np.array([
                 np.log(np.abs(my_wc / wc)),
                 np.log(np.abs(my_chi / chi)),
@@ -172,13 +88,23 @@ class SimulationParameters(object):
             ])
             return logerr
 
+        # guess initial parameters from single fit
+        _, para_g = cls.from_measurement_single(wc - chi, Qb, Ql, R0=R0, R2=R2, **kwargs)
+        _, para_e = cls.from_measurement_single(wc + chi, Qb, Ql, R0=R0, R2=R2, **kwargs)
         x0 = [
-            1. / wc / 1e3 * 1e9, 1. / wc / 1e1 * 1e9, Qb / 1e6,
-            1. / (wc + chi) * 1e9, 1. / (wc + chi) * 1e9,
-            1. / (wc - chi) * 1e9, 1. / (wc - chi) * 1e9
+            1e9 * 0.5 * (para_g.Cl + para_e.Cl),
+            1e9 * 0.5 * (para_g.Cr + para_e.Cr),
+            1e-6 * 0.5 * (para_g.R1 + para_e.R1),
+            1e9 * para_g.C1,
+            1e9 * para_g.L1,
+            1e9 * para_e.C1,
+            1e9 * para_e.L1,
         ]
-        bounds = (1e-6, np.inf)
-        res = least_squares(erf, x0, bounds=bounds)
+        bounds = (
+            [1e-6, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6, 1e-6],
+            [np.inf, np.inf, np.inf, np.inf, np.inf, np.inf, np.inf],
+        )
+        res = least_squares(erf, x0, bounds=bounds, max_nfev=2000)
 
         Cl, Cr, R1, C1_g, L1_g, C1_e, L1_e = res.x
         Cl *= 1e-9
@@ -189,8 +115,8 @@ class SimulationParameters(object):
         C1_e *= 1e-9
         L1_e *= 1e-9
 
-        para_g = cls(Cl=Cl, Cr=Cr, R1=R1, L1=L1_g, C1=C1_g, R0=R0, R2=R2)
-        para_e = cls(Cl=Cl, Cr=Cr, R1=R1, L1=L1_e, C1=C1_e, R0=R0, R2=R2)
+        para_g = cls(Cl=Cl, Cr=Cr, R1=R1, L1=L1_g, C1=C1_g, R0=R0, R2=R2, **kwargs)
+        para_e = cls(Cl=Cl, Cr=Cr, R1=R1, L1=L1_e, C1=C1_e, R0=R0, R2=R2, **kwargs)
 
         return res, para_g, para_e
 
