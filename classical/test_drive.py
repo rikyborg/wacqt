@@ -6,8 +6,8 @@ from scipy.constants import hbar, Boltzmann
 
 from utils import demodulate, demodulate_time
 
-from simulators import sim_transformer as sim
-# from simulators import sim_notch as sim
+# from simulators import sim_transformer as sim
+from simulators import sim_notch as sim
 # from simulators import sim_reflection as sim
 # from simulators import sim_transmission as sim
 
@@ -24,6 +24,8 @@ max_ph = 10.
 nr_freqs = 3
 double = True
 method = "sine"
+# method = "triangle"
+# method = "triangle_new"
 
 res, para_g, para_e = sim.SimulationParameters.from_measurement(
     _wc, _chi, _Qb, _Ql)
@@ -41,31 +43,55 @@ Eph = hbar * w_c
 Tph = 0.  # 0.5 * Eph / Boltzmann
 
 _fc = w_c / (2. * np.pi)
-_df = 2. * np.abs(chi) / (2. * np.pi)
+if method == "triangle_new":
+    _df = np.abs(chi) / (2. * np.pi)
+else:
+    _df = 2. * np.abs(chi) / (2. * np.pi)
 fc, df = para_g.tune(_fc, _df, priority='f')
 para_g.set_df(df)
 para_e.set_df(df)
 
 # readout run
-para_g.set_Nbeats(4)
-para_e.set_Nbeats(4)
+if method == "triangle_new":
+    para_g.set_Nbeats(2)
+    para_e.set_Nbeats(2)
+else:
+    para_g.set_Nbeats(4)
+    para_e.set_Nbeats(4)
 para_g.set_noise_T(T1=Tph)
 para_e.set_noise_T(T1=Tph)
 
 t = para_g.get_time_arr()
-t_drive = para_g.get_drive_time_arr()
+# t_drive = para_g.get_drive_time_arr()
 
 if method == "sine":
-    carrier = np.cos(2. * np.pi * fc * t_drive)
-    window = np.zeros_like(t_drive)
+    carrier = np.cos(2. * np.pi * fc * t)
+    window = np.zeros_like(t)
     if double:
         idx = np.s_[0 * para_g.ns:2 * para_g.ns]
     else:
         idx = np.s_[0 * para_g.ns:1 * para_g.ns]
-    window[idx] = np.sin(2. * np.pi * 0.5 * df * t_drive[idx])**(nr_freqs - 1)
+    window[idx] = np.sin(2. * np.pi * 0.5 * df * t[idx])**(nr_freqs - 1)
     _drive = window * carrier
+elif method == "triangle":
+    carrier = np.cos(2. * np.pi * fc * t)
+    window = np.zeros_like(t)
+    window[:2 * para_g.ns] = np.linspace(0, 1, 2 * para_g.ns, endpoint=False)
+    window[2 * para_g.ns:4 * para_g.ns] = np.linspace(1, 0, 2 * para_g.ns, endpoint=False)
+    window *= np.sin(2. * np.pi * 0.5 * df * t)**(nr_freqs - 1)
+    _drive = window * carrier
+    idx = np.s_[0 * para_g.ns:4 * para_g.ns]
+elif method == "triangle_new":
+    carrier = np.cos(2. * np.pi * fc * t)
+    window = np.zeros_like(t)
+    window[:para_g.ns // 2] = np.linspace(0, 1, para_g.ns // 2, endpoint=False)
+    window[para_g.ns // 2:para_g.ns] = np.linspace(1, 0, para_g.ns // 2, endpoint=False)
+    window *= np.sin(2. * np.pi * 3 * df * t)**(nr_freqs - 2)
+    _drive = window * carrier
+    idx = np.s_[0 * para_g.ns:1 * para_g.ns]
 else:
     raise NotImplementedError
+_drive = np.concatenate((_drive, [0.]))
 
 for ii in range(3):
     AMP = _AMP
