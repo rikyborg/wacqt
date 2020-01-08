@@ -7,10 +7,10 @@ from scipy.constants import hbar, Boltzmann
 
 from utils import demodulate, demodulate_time, get_init_array
 
-from simulators import sim_transformer as sim
+# from simulators import sim_transformer as sim
 # from simulators import sim_notch as sim
 # from simulators import sim_reflection as sim
-# from simulators import sim_transmission as sim
+from simulators import sim_transmission as sim
 
 Nruns = 65536
 
@@ -20,7 +20,7 @@ _Qb = 1e7
 _kappa = _chi / 10
 _Ql = _wc / _kappa
 
-AMP = 2.266e-6  # V
+AMP = 2.904e-5  # V
 nr_freqs = 3
 double = True
 method = "sine"
