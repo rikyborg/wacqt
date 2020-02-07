@@ -78,29 +78,40 @@ class MyProgressBar():
 USE_SSE = True  # stochastic Schrödinger equation, otherwise stochastic master equation
 
 # HAMILTONIAN = "JC"
-HAMILTONIAN = "RWA"
-# HAMILTONIAN = "DISP"
+# HAMILTONIAN = "RWA"
+HAMILTONIAN = "DISP"
 
-Ntraj = 65536
+ENDPOINT = True
 
-amp = 6.35e-1
+PULSE = "single"
+# PULSE = "double"
+# PULSE = "cool"
+
+Ntraj = 1024
+
+# amp = 6.35e-1
+MAX_PH = 10.0
+_amp = 1e-1
 phase = 0.  # OBS: not implemented!
 fc = 6.  # resonator frequency
 wc = 2. * np.pi * fc
 
-fq = 5.  # qubit frequency
+fq = 5.2  # qubit frequency
 wq = 2. * np.pi * fq
 
-chi = 0.02 * 2. * np.pi
+chi = 0.002 * 2. * np.pi
 delta = wq - wc
 g = np.sqrt(np.abs(chi * delta))
+ncrit = delta**2 / g**2 / 4
 print("delta / g = {}".format(delta / g))
+print("ncrit = {}".format(ncrit))
+assert MAX_PH < ncrit
 
 # Q = 100.
 # kappa = wc / Q
 kappa = chi / 10
 Q = wc / kappa
-print("kappa = {:.2g} MHz".format(kappa))
+print("kappa = {:.2g} GHz".format(kappa / 2 / np.pi))
 print("Q = {:.2g}".format(Q))
 
 # cavity operators
@@ -138,8 +149,6 @@ else:
 # Hd = 0.5 * amp * (a + a.dag())
 # H = H0 + V + Hd
 
-H = [H0, V, [a, 'A * sin(chi * t)**2'], [a.dag(), 'A * sin(chi * t)**2']]
-
 # Initial state
 psi0_g = qt.tensor(qt.coherent(N, 0.), qt.basis(2, 1))  # |g>
 psi0_e = qt.tensor(qt.coherent(N, 0.), qt.basis(2, 0))  # |e>
@@ -147,47 +156,106 @@ psi0_p = qt.tensor(qt.coherent(N, 0.),
                    (qt.basis(2, 1) + qt.basis(2, 0)).unit())  # |+>
 
 # Time evolution
-df = 2. * np.abs(chi) / (2. * np.pi)
+T = 2 * np.pi / chi / 2  # single pulse
+df = 1 / T
 # fs = 10 * fc
 fs = 128 * df
 dt = 1. / fs
 ns = int(round(fs / df))
-df = fs / ns
-T = 1. / df
-Nr = 0
-Np = 2
-Nt = Nr + Np
-tlist = np.linspace(0., T * Nt, ns * Nt, endpoint=False)
+# df = fs / ns
+# T = 1. / df
+Np = 2  # number of pulses
+Ns = ns * Np  # number of time samples
+if ENDPOINT:
+    Ns += 1
+tlist = np.linspace(0., T * Np, Ns, endpoint=ENDPOINT)
+
+
+def triang(N, endpoint=False):
+    if endpoint:
+        N = N - 1
+    odd = N % 2
+    if odd:
+        N = N * 2
+    n = N // 2
+    up = np.linspace(0.0, 1.0, n, endpoint=False)
+    down = np.linspace(1.0, 0.0, n, endpoint=False)
+    triang = np.r_[up, down]
+    if odd:
+        triang = triang[::2]
+    if endpoint:
+        triang = np.r_[triang, 0.0]
+    return triang
+
 
 # References from master equation
 print("Calculating deterministic references")
 t0 = time.time()
 
-res = qt.mesolve(
-    H,
-    psi0_g,
-    tlist,
-    [np.sqrt(kappa) * a],
-    [],
-    args={
-        'chi': np.abs(chi),
-        'A': amp / 2
-    },
-)
-xref_g = qt.expect(xc, res.states)
-yref_g = qt.expect(yc, res.states)
+for ii in range(3):
+    amp = _amp
+    if PULSE == "cool":
+        H = [
+            H0,
+            V,
+            [a, 0.5 * amp * np.sin(3 * chi * tlist) * triang(Ns, ENDPOINT)],
+            [a.dag(), 0.5 * amp * np.sin(3 * chi * tlist) * triang(Ns, ENDPOINT)],
+        ]
+    elif PULSE == "double":
+        H = [
+            H0,
+            V,
+            [a, 0.5 * amp * np.sin(chi * tlist)**2],
+            [a.dag(), 0.5 * amp * np.sin(chi * tlist)**2],
+        ]
+    elif PULSE == "single":
+        drive = np.zeros_like(tlist)
+        drive[:Ns // 2] = 0.5 * amp * np.sin(chi * tlist[:Ns // 2])**2
+        H = [
+            H0,
+            V,
+            [a, drive.copy()],
+            [a.dag(), drive.copy()],
+        ]
+    else:
+        raise NotImplementedError
 
-res = qt.mesolve(H,
-                 psi0_e,
-                 tlist, [np.sqrt(kappa) * a], [],
-                 args={
-                     'chi': np.abs(chi),
-                     'A': amp / 2
-                 },
-                 options=qt.Odeoptions(nsteps=5000))
-xref_e = qt.expect(xc, res.states)
-yref_e = qt.expect(yc, res.states)
+    res_g = qt.mesolve(
+        H,
+        psi0_g,
+        tlist,
+        [np.sqrt(kappa) * a],
+        [],
+        # args={
+        #     'chi': np.abs(chi),
+        #     'A': amp / 2,
+        #     'T': 1 / df
+        # },
+    )
+    nmax_g = np.max(qt.expect(nc, res_g.states))
 
+    res_e = qt.mesolve(
+        H,
+        psi0_e,
+        tlist,
+        [np.sqrt(kappa) * a],
+        [],
+        # args={
+        #     'chi': np.abs(chi),
+        #     'A': amp / 2,
+        #     'T': 1 / df
+        # },
+        options=qt.Odeoptions(nsteps=5000))
+    nmax_e = np.max(qt.expect(nc, res_e.states))
+
+    nmax = max(nmax_g, nmax_e)
+    _amp = amp * np.sqrt(MAX_PH / nmax)
+    print(nmax)
+
+xref_g = qt.expect(xc, res_g.states)
+yref_g = qt.expect(yc, res_g.states)
+xref_e = qt.expect(xc, res_e.states)
+yref_e = qt.expect(yc, res_e.states)
 ref_g = xref_g + 1j * yref_g
 ref_e = xref_e + 1j * yref_e
 template = np.conj(ref_e - ref_g)
@@ -196,11 +264,13 @@ t1 = time.time()
 print(format_sec(t1 - t0))
 print()
 
+
 # Fidelity for basis states
 
 print("Fidelity ground state")
 scores_g = np.zeros(Ntraj)
-avg_traj_g = np.zeros(len(tlist), np.complex256)  # use extended-precision accumulator
+avg_traj_g = np.zeros(len(tlist),
+                      np.complex256)  # use extended-precision accumulator
 correct = 0
 bar = MyProgressBar()
 bar.start(Ntraj)
@@ -217,10 +287,11 @@ for ii in range(Ntraj):
             solver='taylor15',
             method='heterodyne',
             store_measurement=True,
-            args={
-                'chi': np.abs(chi),
-                'A': amp / 2
-            },
+            # args={
+            #     'chi': np.abs(chi),
+            #     'A': amp / 2,
+            #     'T': 1 / df
+            # },
             progress_bar=DummyProgressBar(),
         )
     else:
@@ -236,10 +307,11 @@ for ii in range(Ntraj):
             solver='taylor15',
             method='heterodyne',
             store_measurement=True,
-            args={
-                'chi': np.abs(chi),
-                'A': amp / 2
-            },
+            # args={
+            #     'chi': np.abs(chi),
+            #     'A': amp / 2,
+            #     'T': 1 / df
+            # },
             progress_bar=DummyProgressBar(),
         )
     measurement = result.measurement[0]
@@ -264,7 +336,8 @@ print()
 
 print("Fidelity excited state")
 scores_e = np.zeros(Ntraj)
-avg_traj_e = np.zeros(len(tlist), np.complex256)  # use extended-precision accumulator
+avg_traj_e = np.zeros(len(tlist),
+                      np.complex256)  # use extended-precision accumulator
 correct = 0
 bar = MyProgressBar()
 bar.start(Ntraj)
@@ -281,10 +354,10 @@ for ii in range(Ntraj):
             solver='taylor15',
             method='heterodyne',
             store_measurement=True,
-            args={
-                'chi': np.abs(chi),
-                'A': amp / 2
-            },
+            # args={
+            #     'chi': np.abs(chi),
+            #     'A': amp / 2
+            # },
             progress_bar=DummyProgressBar(),
         )
     else:
@@ -300,10 +373,10 @@ for ii in range(Ntraj):
             solver='taylor15',
             method='heterodyne',
             store_measurement=True,
-            args={
-                'chi': np.abs(chi),
-                'A': amp / 2
-            },
+            # args={
+            #     'chi': np.abs(chi),
+            #     'A': amp / 2
+            # },
             progress_bar=DummyProgressBar(),
         )
     measurement = result.measurement[0]
@@ -326,108 +399,109 @@ t1 = time.time()
 print("{:d} out of {:d}: {:.1%}".format(correct, Ntraj, correct / Ntraj))
 print()
 
-print("Fidelity plus state")
-ssz = np.zeros((Ntraj, Np * ns))
-ssx = np.zeros((Ntraj, Np * ns))
-ssy = np.zeros((Ntraj, Np * ns))
-scores_p = np.zeros(Ntraj)
-correct = 0
-bar = MyProgressBar()
-bar.start(Ntraj)
-for ii in range(Ntraj):
-    if USE_SSE:
-        result = qt.ssesolve(
-            H,
-            psi0_p,
-            tlist,
-            [np.sqrt(kappa) * a],
-            [],
-            ntraj=1,
-            nsubsteps=10,
-            solver='taylor15',
-            method='heterodyne',
-            store_measurement=True,
-            args={
-                'chi': np.abs(chi),
-                'A': amp / 2
-            },
-            progress_bar=DummyProgressBar(),
-        )
-    else:
-        result = qt.smesolve(
-            H,
-            psi0_p,
-            tlist,
-            [],
-            [np.sqrt(kappa) * a],
-            [],
-            ntraj=1,
-            nsubsteps=10,
-            solver='taylor15',
-            method='heterodyne',
-            store_measurement=True,
-            args={
-                'chi': np.abs(chi),
-                'A': amp / 2
-            },
-            progress_bar=DummyProgressBar(),
-        )
-    measurement = result.measurement[0]
-    m = measurement[:, 0, 0].real + 1j * measurement[:, 0, 1].real
-    score = np.sum(template * m).real
-    ssz[ii] = qt.expect(sigmaz, result.states[0]).real
-    ssx[ii] = qt.expect(sigmax, result.states[0]).real
-    ssy[ii] = qt.expect(sigmay, result.states[0]).real
-    if ssz[ii, -1] > 0:
-        if score > 0:
-            correct += 1
-        else:
-            print("WRONG!!! ", end="")
-    if ssz[ii, -1] < 0:
-        if score < 0:
-            correct += 1
-        else:
-            print("WRONG!!! ", end="")
-    scores_p[ii] = score
+# print("Fidelity plus state")
+# ssz = np.zeros((Ntraj, Np * ns))
+# ssx = np.zeros((Ntraj, Np * ns))
+# ssy = np.zeros((Ntraj, Np * ns))
+# scores_p = np.zeros(Ntraj)
+# correct = 0
+# bar = MyProgressBar()
+# bar.start(Ntraj)
+# for ii in range(Ntraj):
+#     if USE_SSE:
+#         result = qt.ssesolve(
+#             H,
+#             psi0_p,
+#             tlist,
+#             [np.sqrt(kappa) * a],
+#             [],
+#             ntraj=1,
+#             nsubsteps=10,
+#             solver='taylor15',
+#             method='heterodyne',
+#             store_measurement=True,
+#             # args={
+#             #     'chi': np.abs(chi),
+#             #     'A': amp / 2
+#             # },
+#             progress_bar=DummyProgressBar(),
+#         )
+#     else:
+#         result = qt.smesolve(
+#             H,
+#             psi0_p,
+#             tlist,
+#             [],
+#             [np.sqrt(kappa) * a],
+#             [],
+#             ntraj=1,
+#             nsubsteps=10,
+#             solver='taylor15',
+#             method='heterodyne',
+#             store_measurement=True,
+#             # args={
+#             #     'chi': np.abs(chi),
+#             #     'A': amp / 2
+#             # },
+#             progress_bar=DummyProgressBar(),
+#         )
+#     measurement = result.measurement[0]
+#     m = measurement[:, 0, 0].real + 1j * measurement[:, 0, 1].real
+#     score = np.sum(template * m).real
+#     ssz[ii] = qt.expect(sigmaz, result.states[0]).real
+#     ssx[ii] = qt.expect(sigmax, result.states[0]).real
+#     ssy[ii] = qt.expect(sigmay, result.states[0]).real
+#     if ssz[ii, -1] > 0:
+#         if score > 0:
+#             correct += 1
+#         else:
+#             print("WRONG!!! ", end="")
+#     if ssz[ii, -1] < 0:
+#         if score < 0:
+#             correct += 1
+#         else:
+#             print("WRONG!!! ", end="")
+#     scores_p[ii] = score
 
-    bar.update()
+#     bar.update()
 
-bar.finished()
+# bar.finished()
 
-print("{:d} out of {:d}: {:.1%}".format(correct, Ntraj, correct / Ntraj))
-print()
+# print("{:d} out of {:d}: {:.1%}".format(correct, Ntraj, correct / Ntraj))
+# print()
 
-scriptname = os.path.splitext(os.path.basename(__file__))[0]
-save_filename = "{:s}_{:d}_{:s}_{:s}_g_e_p_{:d}.npz".format(
-    scriptname,
-    int(time.time()),
-    HAMILTONIAN,
-    "SSE" if USE_SSE else "SME",
-    Ntraj,
-)
-np.savez(
-    save_filename,
-    amp=amp,
-    phase=0.,
-    wc=wc,
-    wq=wq,
-    chi=chi,
-    kappa=kappa,
-    N=N,
-    wrot1=wrot1,
-    wrot2=wrot2,
-    ns=ns,
-    Np=Np,
-    Ntraj=Ntraj,
-    scores_g=scores_g,
-    scores_e=scores_e,
-    scores_p=scores_p,
-    ssz=ssz,
-    ssx=ssx,
-    ssy=ssy,
-    tlist=tlist,
-    ref_g=ref_g,
-    ref_e=ref_e,
-    avg_traj_g=avg_traj_g,
-    avg_traj_e=avg_traj_e,
-)
+
+# scriptname = os.path.splitext(os.path.basename(__file__))[0]
+# save_filename = "{:s}_{:d}_{:s}_{:s}_g_e_p_{:d}.npz".format(
+#     scriptname,
+#     int(time.time()),
+#     HAMILTONIAN,
+#     "SSE" if USE_SSE else "SME",
+#     Ntraj,
+# )
+# np.savez(
+#     save_filename,
+#     amp=amp,
+#     phase=0.,
+#     wc=wc,
+#     wq=wq,
+#     chi=chi,
+#     kappa=kappa,
+#     N=N,
+#     wrot1=wrot1,
+#     wrot2=wrot2,
+#     ns=ns,
+#     Np=Np,
+#     Ntraj=Ntraj,
+#     scores_g=scores_g,
+#     scores_e=scores_e,
+#     # scores_p=scores_p,
+#     # ssz=ssz,
+#     # ssx=ssx,
+#     # ssy=ssy,
+#     tlist=tlist,
+#     ref_g=ref_g,
+#     ref_e=ref_e,
+#     avg_traj_g=avg_traj_g,
+#     avg_traj_e=avg_traj_e,
+# )
