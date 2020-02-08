@@ -75,6 +75,34 @@ class MyProgressBar():
             format_sec(t_stop - self.t_start), " " * 100))
 
 
+def inprod(f, g, t=None, dt=None):
+    if t is not None:
+        dt = t[1] - t[0]
+        ns = len(t)
+        T = ns * dt
+    elif dt is not None:
+        ns = len(f)
+        T = ns * dt
+    else:
+        T = 1.
+    return np.trapz(f * np.conj(g), x=t) / T
+
+
+def norm(x, t=None, dt=None):
+    return np.sqrt(np.real(inprod(x, x, t=t, dt=dt)))
+
+
+def proj(v, u, t=None, dt=None):
+    if not norm(u, t=t, dt=dt):
+        return 0.
+    else:
+        return inprod(v, u, t=t, dt=dt) / inprod(u, u, t=t, dt=dt) * u
+
+
+def dist(f, g, t=None, dt=None):
+    return norm(f - g, t=t, dt=dt)
+
+
 USE_SSE = True  # stochastic Schrödinger equation, otherwise stochastic master equation
 
 # HAMILTONIAN = "JC"
@@ -83,8 +111,8 @@ HAMILTONIAN = "DISP"
 
 ENDPOINT = True
 
-PULSE = "single"
-# PULSE = "double"
+# PULSE = "single"
+PULSE = "double"
 # PULSE = "cool"
 
 Ntraj = 1024
@@ -109,7 +137,9 @@ assert MAX_PH < ncrit
 
 # Q = 100.
 # kappa = wc / Q
-kappa = chi / 10
+# kappa = chi / 10
+chi_over_kappa = 10.
+kappa = chi / chi_over_kappa
 Q = wc / kappa
 print("kappa = {:.2g} GHz".format(kappa / 2 / np.pi))
 print("Q = {:.2g}".format(Q))
@@ -199,7 +229,10 @@ for ii in range(3):
             H0,
             V,
             [a, 0.5 * amp * np.sin(3 * chi * tlist) * triang(Ns, ENDPOINT)],
-            [a.dag(), 0.5 * amp * np.sin(3 * chi * tlist) * triang(Ns, ENDPOINT)],
+            [
+                a.dag(),
+                0.5 * amp * np.sin(3 * chi * tlist) * triang(Ns, ENDPOINT)
+            ],
         ]
     elif PULSE == "double":
         H = [
@@ -256,14 +289,15 @@ xref_g = qt.expect(xc, res_g.states)
 yref_g = qt.expect(yc, res_g.states)
 xref_e = qt.expect(xc, res_e.states)
 yref_e = qt.expect(yc, res_e.states)
-ref_g = xref_g + 1j * yref_g
-ref_e = xref_e + 1j * yref_e
-template = np.conj(ref_e - ref_g)
+
+template_g = np.sqrt(kappa) * (xref_g + 1j * yref_g)
+template_e = np.sqrt(kappa) * (xref_e + 1j * yref_e)
+template_diff = np.conj(template_e - template_g)
+threshold = 0.5 * (norm(template_e, tlist)**2 - norm(template_g, tlist)**2)
 
 t1 = time.time()
 print(format_sec(t1 - t0))
 print()
-
 
 # Fidelity for basis states
 
@@ -315,10 +349,12 @@ for ii in range(Ntraj):
             progress_bar=DummyProgressBar(),
         )
     measurement = result.measurement[0]
-    m = measurement[:, 0, 0].real + 1j * measurement[:, 0, 1].real
+    m = 0.5 * (measurement[:, 0, 0].real + 1j * measurement[:, 0, 1].real)
+    # divide by two because they use x = a + a.dag(),
+    # but we want x = (a + a.dag()) / 2
     avg_traj_g += m
-    score = np.sum(template * m).real
-    if score < 0:
+    score = np.real(inprod(m, template_diff, tlist))
+    if score < threshold:
         correct += 1
     else:
         # print("WRONG!!! ", end="")
@@ -380,10 +416,12 @@ for ii in range(Ntraj):
             progress_bar=DummyProgressBar(),
         )
     measurement = result.measurement[0]
-    m = measurement[:, 0, 0].real + 1j * measurement[:, 0, 1].real
+    m = 0.5 * (measurement[:, 0, 0].real + 1j * measurement[:, 0, 1].real)
+    # divide by two because they use x = a + a.dag(),
+    # but we want x = (a + a.dag()) / 2
     avg_traj_e += m
-    score = np.sum(template * m).real
-    if score > 0:
+    score = np.real(inprod(m, template_diff, tlist))
+    if score > threshold:
         correct += 1
     else:
         print("WRONG!!! ", end="")
@@ -446,18 +484,20 @@ print()
 #             progress_bar=DummyProgressBar(),
 #         )
 #     measurement = result.measurement[0]
-#     m = measurement[:, 0, 0].real + 1j * measurement[:, 0, 1].real
-#     score = np.sum(template * m).real
+#     m = 0.5 * (measurement[:, 0, 0].real + 1j * measurement[:, 0, 1].real)
+#     # divide by two because they use x = a + a.dag(),
+#     # but we want x = (a + a.dag()) / 2
+#     score = np.real(inprod(m, template_diff, tlist))
 #     ssz[ii] = qt.expect(sigmaz, result.states[0]).real
 #     ssx[ii] = qt.expect(sigmax, result.states[0]).real
 #     ssy[ii] = qt.expect(sigmay, result.states[0]).real
 #     if ssz[ii, -1] > 0:
-#         if score > 0:
+#         if score > threshold:
 #             correct += 1
 #         else:
 #             print("WRONG!!! ", end="")
 #     if ssz[ii, -1] < 0:
-#         if score < 0:
+#         if score < threshold:
 #             correct += 1
 #         else:
 #             print("WRONG!!! ", end="")
@@ -470,38 +510,38 @@ print()
 # print("{:d} out of {:d}: {:.1%}".format(correct, Ntraj, correct / Ntraj))
 # print()
 
-
-# scriptname = os.path.splitext(os.path.basename(__file__))[0]
-# save_filename = "{:s}_{:d}_{:s}_{:s}_g_e_p_{:d}.npz".format(
-#     scriptname,
-#     int(time.time()),
-#     HAMILTONIAN,
-#     "SSE" if USE_SSE else "SME",
-#     Ntraj,
-# )
-# np.savez(
-#     save_filename,
-#     amp=amp,
-#     phase=0.,
-#     wc=wc,
-#     wq=wq,
-#     chi=chi,
-#     kappa=kappa,
-#     N=N,
-#     wrot1=wrot1,
-#     wrot2=wrot2,
-#     ns=ns,
-#     Np=Np,
-#     Ntraj=Ntraj,
-#     scores_g=scores_g,
-#     scores_e=scores_e,
-#     # scores_p=scores_p,
-#     # ssz=ssz,
-#     # ssx=ssx,
-#     # ssy=ssy,
-#     tlist=tlist,
-#     ref_g=ref_g,
-#     ref_e=ref_e,
-#     avg_traj_g=avg_traj_g,
-#     avg_traj_e=avg_traj_e,
-# )
+scriptname = os.path.splitext(os.path.basename(__file__))[0]
+struct_time = time.localtime()
+save_filename = "{:s}_{:s}_{:g}_{:d}.npz".format(
+    scriptname,
+    time.strftime("%Y%m%d_%H%M%S", struct_time),
+    chi_over_kappa,
+    Ntraj,
+)
+np.savez(
+    save_filename,
+    amp=amp,
+    phase=0.,
+    wc=wc,
+    wq=wq,
+    chi=chi,
+    kappa=kappa,
+    N=N,
+    wrot1=wrot1,
+    wrot2=wrot2,
+    ns=ns,
+    Np=Np,
+    Ntraj=Ntraj,
+    scores_g=scores_g,
+    scores_e=scores_e,
+    # scores_p=scores_p,
+    # ssz=ssz,
+    # ssx=ssx,
+    # ssy=ssy,
+    tlist=tlist,
+    template_g=template_g,
+    template_e=template_e,
+    template_diff=template_diff,
+    avg_traj_g=avg_traj_g,
+    avg_traj_e=avg_traj_e,
+)
