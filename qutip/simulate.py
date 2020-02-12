@@ -285,7 +285,7 @@ for ii in range(5):
 
     nmax = max(nmax_g, nmax_e)
     _amp = amp * np.sqrt(MAX_PH / nmax)
-    print(nmax)
+    print(nmax, amp)
 
 xref_g = qt.expect(xc, res_g.states)
 yref_g = qt.expect(yc, res_g.states)
