@@ -6,11 +6,13 @@ import numpy as np
 import qutip as qt
 
 if len(sys.argv) == 1:
-    # PULSE = "single short"
+    # PULSE = "short single"
     # PULSE = "double"
     # PULSE = "cool"
-    # PULSE = "almost"
-    PULSE = "single"
+    # PULSE = "single"
+    # PULSE = "almost"  # OBS: double length (4 pulses)!
+    # PULSE = "long double"
+    PULSE = "long single"
 
     chi_over_kappa = 10.
 
@@ -21,7 +23,6 @@ elif len(sys.argv) == 3:
 else:
     print("Either no arguments, or PULSE and chi_over_kappa!")
     sys.exit(1)
-
 
 USE_SSE = True  # stochastic Schrödinger eq., otherwise stochastic master eq.
 
@@ -207,7 +208,7 @@ dt = 1. / fs
 ns = int(round(fs / df))
 # df = fs / ns
 # T = 1. / df
-if PULSE == "almost":
+if PULSE in ["almost", "long double", "long single"]:
     Np = 4
 else:
     Np = 2  # number of pulses
@@ -238,63 +239,38 @@ def triang(N, endpoint=False):
 print("Calculating deterministic references")
 t0 = time.time()
 
-for ii in range(3):
+for ii in range(5):
     amp = _amp
     if PULSE == "cool":
         drive = 0.5 * amp * np.sin(3 * chi * tlist) * triang(Ns, ENDPOINT)
-        H = [
-            H0,
-            V,
-            [a, drive.copy()],
-            [a.dag(), drive.copy()],
-        ]
     elif PULSE == "almost":
         drive = 0.5 * amp * np.sin(chi * tlist)**2 * triang(Ns, ENDPOINT)
-        H = [
-            H0,
-            V,
-            [a, drive.copy()],
-            [a.dag(), drive.copy()],
-        ]
     elif PULSE == "double":
         drive = 0.5 * amp * np.sin(chi * tlist)**2
-        H = [
-            H0,
-            V,
-            [a, drive.copy()],
-            [a.dag(), drive.copy()],
-        ]
-    elif PULSE == "single short":
+    elif PULSE == "long double":
+        drive = 0.5 * amp * np.sin(0.5 * chi * tlist)**2
+    elif PULSE == "short single":
         drive = np.zeros_like(tlist)
         drive[:Ns // 2] = 0.5 * amp * np.sin(chi * tlist[:Ns // 2])**2
-        H = [
-            H0,
-            V,
-            [a, drive.copy()],
-            [a.dag(), drive.copy()],
-        ]
     elif PULSE == "single":
         drive = 0.5 * amp * np.sin(0.5 * chi * tlist)**2
-        H = [
-            H0,
-            V,
-            [a, drive.copy()],
-            [a.dag(), drive.copy()],
-        ]
+    elif PULSE == "long single":
+        drive = 0.5 * amp * np.sin(0.25 * chi * tlist)**2
     else:
         raise NotImplementedError
 
+    H = [
+        H0,
+        V,
+        [a, drive.copy()],
+        [a.dag(), drive.copy()],
+    ]
     res_g = qt.mesolve(
         H,
         psi0_g,
         tlist,
         [np.sqrt(kappa) * a],
         [],
-        # args={
-        #     'chi': np.abs(chi),
-        #     'A': amp / 2,
-        #     'T': 1 / df
-        # },
     )
     nmax_g = np.max(qt.expect(nc, res_g.states))
 
@@ -304,12 +280,7 @@ for ii in range(3):
         tlist,
         [np.sqrt(kappa) * a],
         [],
-        # args={
-        #     'chi': np.abs(chi),
-        #     'A': amp / 2,
-        #     'T': 1 / df
-        # },
-        options=qt.Odeoptions(nsteps=5000))
+    )
     nmax_e = np.max(qt.expect(nc, res_e.states))
 
     nmax = max(nmax_g, nmax_e)
@@ -333,7 +304,6 @@ t1 = time.time()
 print(format_sec(t1 - t0))
 print()
 
-
 # Fidelity for basis states
 
 print("Fidelity ground state")
@@ -356,11 +326,6 @@ for ii in range(Ntraj):
             solver='taylor15',
             method='heterodyne',
             store_measurement=True,
-            # args={
-            #     'chi': np.abs(chi),
-            #     'A': amp / 2,
-            #     'T': 1 / df
-            # },
             progress_bar=DummyProgressBar(),
         )
     else:
@@ -376,11 +341,6 @@ for ii in range(Ntraj):
             solver='taylor15',
             method='heterodyne',
             store_measurement=True,
-            # args={
-            #     'chi': np.abs(chi),
-            #     'A': amp / 2,
-            #     'T': 1 / df
-            # },
             progress_bar=DummyProgressBar(),
         )
     measurement = result.measurement[0]
@@ -425,10 +385,6 @@ for ii in range(Ntraj):
             solver='taylor15',
             method='heterodyne',
             store_measurement=True,
-            # args={
-            #     'chi': np.abs(chi),
-            #     'A': amp / 2
-            # },
             progress_bar=DummyProgressBar(),
         )
     else:
@@ -444,10 +400,6 @@ for ii in range(Ntraj):
             solver='taylor15',
             method='heterodyne',
             store_measurement=True,
-            # args={
-            #     'chi': np.abs(chi),
-            #     'A': amp / 2
-            # },
             progress_bar=DummyProgressBar(),
         )
     measurement = result.measurement[0]
