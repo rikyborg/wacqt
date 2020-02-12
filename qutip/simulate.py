@@ -1,8 +1,45 @@
 import os
+import sys
 import time
 
 import numpy as np
 import qutip as qt
+
+if len(sys.argv) == 1:
+    # PULSE = "single short"
+    # PULSE = "double"
+    # PULSE = "cool"
+    # PULSE = "almost"
+    PULSE = "single"
+
+    chi_over_kappa = 10.
+
+elif len(sys.argv) == 3:
+    PULSE = str(sys.argv[1])
+    chi_over_kappa = float(sys.argv[2])
+
+else:
+    print("Either no arguments, or PULSE and chi_over_kappa!")
+    sys.exit(1)
+
+
+USE_SSE = True  # stochastic Schrödinger eq., otherwise stochastic master eq.
+
+# HAMILTONIAN = "JC"
+# HAMILTONIAN = "RWA"
+HAMILTONIAN = "DISP"
+
+ENDPOINT = True
+
+Ntraj = 32768
+
+MAX_PH = 10.0
+_amp = 1e-1  # initial amplitude
+phase = 0.  # OBS: not implemented!
+
+fc = 6.  # resonator frequency
+fq = 5.2  # qubit frequency
+chi = 0.002 * 2. * np.pi  # dispersive shift
 
 
 def format_sec(s):
@@ -103,31 +140,8 @@ def dist(f, g, t=None, dt=None):
     return norm(f - g, t=t, dt=dt)
 
 
-USE_SSE = True  # stochastic Schrödinger equation, otherwise stochastic master equation
-
-# HAMILTONIAN = "JC"
-# HAMILTONIAN = "RWA"
-HAMILTONIAN = "DISP"
-
-ENDPOINT = True
-
-# PULSE = "single"
-PULSE = "double"
-# PULSE = "cool"
-
-Ntraj = 1024
-
-# amp = 6.35e-1
-MAX_PH = 10.0
-_amp = 1e-1
-phase = 0.  # OBS: not implemented!
-fc = 6.  # resonator frequency
 wc = 2. * np.pi * fc
-
-fq = 5.2  # qubit frequency
 wq = 2. * np.pi * fq
-
-chi = 0.002 * 2. * np.pi
 delta = wq - wc
 g = np.sqrt(np.abs(chi * delta))
 ncrit = delta**2 / g**2 / 4
@@ -138,7 +152,6 @@ assert MAX_PH < ncrit
 # Q = 100.
 # kappa = wc / Q
 # kappa = chi / 10
-chi_over_kappa = 10.
 kappa = chi / chi_over_kappa
 Q = wc / kappa
 print("kappa = {:.2g} GHz".format(kappa / 2 / np.pi))
@@ -194,7 +207,10 @@ dt = 1. / fs
 ns = int(round(fs / df))
 # df = fs / ns
 # T = 1. / df
-Np = 2  # number of pulses
+if PULSE == "almost":
+    Np = 4
+else:
+    Np = 2  # number of pulses
 Ns = ns * Np  # number of time samples
 if ENDPOINT:
     Ns += 1
@@ -225,25 +241,40 @@ t0 = time.time()
 for ii in range(3):
     amp = _amp
     if PULSE == "cool":
+        drive = 0.5 * amp * np.sin(3 * chi * tlist) * triang(Ns, ENDPOINT)
         H = [
             H0,
             V,
-            [a, 0.5 * amp * np.sin(3 * chi * tlist) * triang(Ns, ENDPOINT)],
-            [
-                a.dag(),
-                0.5 * amp * np.sin(3 * chi * tlist) * triang(Ns, ENDPOINT)
-            ],
+            [a, drive.copy()],
+            [a.dag(), drive.copy()],
+        ]
+    elif PULSE == "almost":
+        drive = 0.5 * amp * np.sin(chi * tlist)**2 * triang(Ns, ENDPOINT)
+        H = [
+            H0,
+            V,
+            [a, drive.copy()],
+            [a.dag(), drive.copy()],
         ]
     elif PULSE == "double":
+        drive = 0.5 * amp * np.sin(chi * tlist)**2
         H = [
             H0,
             V,
-            [a, 0.5 * amp * np.sin(chi * tlist)**2],
-            [a.dag(), 0.5 * amp * np.sin(chi * tlist)**2],
+            [a, drive.copy()],
+            [a.dag(), drive.copy()],
         ]
-    elif PULSE == "single":
+    elif PULSE == "single short":
         drive = np.zeros_like(tlist)
         drive[:Ns // 2] = 0.5 * amp * np.sin(chi * tlist[:Ns // 2])**2
+        H = [
+            H0,
+            V,
+            [a, drive.copy()],
+            [a.dag(), drive.copy()],
+        ]
+    elif PULSE == "single":
+        drive = 0.5 * amp * np.sin(0.5 * chi * tlist)**2
         H = [
             H0,
             V,
@@ -287,17 +318,21 @@ for ii in range(3):
 
 xref_g = qt.expect(xc, res_g.states)
 yref_g = qt.expect(yc, res_g.states)
+nph_g = qt.expect(nc, res_g.states)
 xref_e = qt.expect(xc, res_e.states)
 yref_e = qt.expect(yc, res_e.states)
+nph_e = qt.expect(nc, res_e.states)
+print("Leftover: {:.1e}".format(max(nph_g[-1], nph_e[-1])))
 
 template_g = np.sqrt(kappa) * (xref_g + 1j * yref_g)
 template_e = np.sqrt(kappa) * (xref_e + 1j * yref_e)
-template_diff = np.conj(template_e - template_g)
+template_diff = template_e - template_g
 threshold = 0.5 * (norm(template_e, tlist)**2 - norm(template_g, tlist)**2)
 
 t1 = time.time()
 print(format_sec(t1 - t0))
 print()
+
 
 # Fidelity for basis states
 
@@ -539,9 +574,11 @@ np.savez(
     # ssx=ssx,
     # ssy=ssy,
     tlist=tlist,
+    drive=drive,
     template_g=template_g,
     template_e=template_e,
     template_diff=template_diff,
+    threshold=threshold,
     avg_traj_g=avg_traj_g,
     avg_traj_e=avg_traj_e,
 )
