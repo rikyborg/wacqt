@@ -9,8 +9,8 @@ sp.init_printing()
 chi, alpha, g2, Delta, ncrit, Gamma, Ec, Ej, wq, wr, kappa, JCR, XKR = sp.symbols('chi, alpha, g2, Delta, ncrit, Gamma, Ec, Ej, wq, wr, kappa, JCR, XKR')
 
 para = OrderedDict(
-    # chi=None,
-    alpha=- 2. * np.pi * 250e6,
+    chi=-2. * np.pi * 10e6,
+    alpha=- 2. * np.pi * 300e6,
     g2=(2 * np.pi * 100e6)**2,
     Delta=None,
     ncrit=None,
@@ -18,16 +18,16 @@ para = OrderedDict(
     # Ec=None,
     # Ej=None,
     # wq=None,
-    wr=2. * np.pi * 6.30e9,
-    kappa=None,
-    JCR=52.6,
-    XKR=-2.,
+    wr=2. * np.pi * 5.70e9,
+    kappa=2. * np.pi * 100e3,
+    JCR=None,
+    # XKR=-2.,
 )
 
 para['g2'] *= (para['wr'] / (2. * np.pi * 6e9))**2
 
 system = [
-    alpha * g2 / (Delta * (Delta + alpha)) - (XKR * kappa),
+    alpha * g2 / (Delta * (Delta + alpha)) - chi,
     Delta**2 / (4 * g2) - ncrit,
     kappa * g2 / Delta**2 - Gamma,
     # Ec + alpha,
@@ -59,7 +59,7 @@ num_system = [expr.subs(substitutions) for expr in system]
 
 solutions = sp.solve(num_system, *variable_names)
 print("Found {:d} solutions".format(len(solutions)))
-for ii, sol in enumerate(solutions):
+for ii, sol in enumerate(reversed(solutions)):
     print('\n\n')
     print('*** Solution {:d}'.format(ii + 1))
     variable_values = np.array(sol, dtype=np.float64)
@@ -67,7 +67,8 @@ for ii, sol in enumerate(solutions):
     sol_para = dict(para)
     sol_para.update({sp.pycode(variable_names[i]): variable_values[i] for i in range(n_eqs)})
 
-    sol_para['chi'] = sol_para['XKR'] * sol_para['kappa']
+    # sol_para['chi'] = sol_para['XKR'] * sol_para['kappa']
+    sol_para['XKR'] = sol_para['chi'] / sol_para['kappa']
     sol_para['Ec'] = -sol_para['alpha']
     sol_para['Ej'] = sol_para['JCR'] * sol_para['Ec']
     sol_para['wq'] = sol_para['wr'] + sol_para['Delta']
@@ -89,3 +90,4 @@ for ii, sol in enumerate(solutions):
     print("Ec = {:.4g}".format(sol_para['Ec'] / 2 / np.pi))
     print("Ej = {:.4g}".format(sol_para['Ej'] / 2 / np.pi))
     print("Ej / Ec = {:.4g}".format(sol_para['JCR']))
+    print("Delta / g = {:.4g}".format(sol_para['Delta'] / np.sqrt(sol_para['g2'])))

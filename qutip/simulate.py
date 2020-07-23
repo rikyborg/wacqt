@@ -304,6 +304,7 @@ t1 = time.time()
 print(format_sec(t1 - t0))
 print()
 
+assert False
 # Fidelity for basis states
 
 print("Fidelity ground state")

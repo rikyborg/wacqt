@@ -1,18 +1,18 @@
 import os
 
-from matplotlib import rcParams
+# from matplotlib import rcParams
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.special import erf
 
-prl_single_column_width = 8.6 / 2.54  # inch
-fig_width = 2 * prl_single_column_width
-fig_height = fig_width * 3 / 4
+# prl_single_column_width = 8.6 / 2.54  # inch
+# fig_width = 2 * prl_single_column_width
+# fig_height = fig_width * 3 / 4
 
-# Change default font size for nicer plots
-# rcParams['figure.dpi'] = 109  # ric-nanophys
-rcParams['figure.dpi'] = 167  # ric-xps
-rcParams['figure.figsize'] = [fig_width, fig_height]
+# # Change default font size for nicer plots
+# # rcParams['figure.dpi'] = 109  # ric-nanophys
+# rcParams['figure.dpi'] = 167  # ric-xps
+# rcParams['figure.figsize'] = [fig_width, fig_height]
 
 # rcParams['figure.titlesize'] = 'medium'  # 'large'
 # rcParams['axes.labelsize'] = 'small'  # 'medium'
@@ -38,13 +38,13 @@ def double_gaussian(x, m, s):
 
 
 pulse_list = [
-    "short single",
+    # "short single",
     "single",
     "double",
-    "cool",
+    "triangle",
     "long single",
     "long double",
-    "almost",
+    "long triangle",
 ]
 
 chi_kappa_list = []
