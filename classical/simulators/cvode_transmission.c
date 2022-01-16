@@ -318,9 +318,9 @@ int integrate_cvode(void* user_data,
     /* Call CVodeCreate to create the solver memory
      * with stepping and iteration method */
     if (para->stiff_equation==true) {
-        cvode_mem = CVodeCreate(CV_BDF, CV_NEWTON);
+        cvode_mem = CVodeCreate(CV_BDF);
     } else {  // nonstiff
-        cvode_mem = CVodeCreate(CV_ADAMS, CV_FUNCTIONAL);
+        cvode_mem = CVodeCreate(CV_ADAMS);
     }
     if (check_flag((void *)cvode_mem, "CVodeCreate", 0)) return(1);
 
