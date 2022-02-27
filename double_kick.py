@@ -66,9 +66,9 @@ def delta_dot(t: float, w0: float) -> float:
     return -wd * gamma(t, w0)
 
 
-def solve_all(i2: float, q2: float, t0: float, t1: float, t2: float):
+def solve_all(i2: float, q2: float, t0: float, t1: float, t2: float, t3: float, t4: float, t5: float):
     # yapf: disable
-    a = np.array([
+    a_kick = np.array([
         [alpha(t0, wg),      beta(t0, wg),      0,                  0,                 gamma(t0, wg),      delta(t0, wg),      0,                 0,                0,                 0,                0,                 0                ],
         [alpha_dot(t0, wg),  beta_dot(t0, wg),  0,                  0,                 gamma_dot(t0, wg),  delta_dot(t0, wg),  0,                 0,                0,                 0,                0,                 0                ],
         [0,                  0,                 alpha(t0, we),      beta(t0, we),      gamma(t0, we),      delta(t0, we),      0,                 0,                0,                 0,                0,                 0                ],
@@ -84,7 +84,7 @@ def solve_all(i2: float, q2: float, t0: float, t1: float, t2: float):
     ])
     # yapf: enable
 
-    b = np.array([
+    b_kick = np.array([
         0,
         0,
         0,
@@ -99,7 +99,43 @@ def solve_all(i2: float, q2: float, t0: float, t1: float, t2: float):
         gamma_dot(t2, we) * i2 + delta_dot(t2, we) * q2,
     ])
 
-    return np.linalg.solve(a, b)
+    sol_kick = np.linalg.solve(a_kick, b_kick)
+
+    # yapf: disable
+    a_reset = np.array([
+        [alpha(t3, wg),      beta(t3, wg),      0,                  0,                 gamma(t3, wg),      delta(t3, wg),      0,                 0,                0,                 0,                0,                 0                ],
+        [alpha_dot(t3, wg),  beta_dot(t3, wg),  0,                  0,                 gamma_dot(t3, wg),  delta_dot(t3, wg),  0,                 0,                0,                 0,                0,                 0                ],
+        [0,                  0,                 alpha(t3, we),      beta(t3, we),      gamma(t3, we),      delta(t3, we),      0,                 0,                0,                 0,                0,                 0                ],
+        [0,                  0,                 alpha_dot(t3, we),  beta_dot(t3, we),  gamma_dot(t3, we),  delta_dot(t3, we),  0,                 0,                0,                 0,                0,                 0                ],
+        [-alpha(t4, wg),     -beta(t4, wg),     0,                  0,                 -gamma(t4, wg),     -delta(t4, wg),     alpha(t4, wg),     beta(t4, wg),     0,                 0,                gamma(t4, wg),     delta(t4, wg)    ],
+        [-alpha_dot(t4, wg), -beta_dot(t4, wg), 0,                  0,                 -gamma_dot(t4, wg), -delta_dot(t4, wg), alpha_dot(t4, wg), beta_dot(t4, wg), 0,                 0,                gamma_dot(t4, wg), delta_dot(t4, wg)],
+        [0,                  0,                 -alpha(t4, we),     -beta(t4, we),     -gamma(t4, we),     -delta(t4, we),     0,                 0,                alpha(t4, we),     beta(t4, we),     gamma(t4, we),     delta(t4, we),   ],
+        [0,                  0,                 -alpha_dot(t4, we), -beta_dot(t4, we), -gamma_dot(t4, we), -delta_dot(t4, we), 0,                 0,                alpha_dot(t4, we), beta_dot(t4, we), gamma_dot(t4, we), delta_dot(t4, we)],
+        [0,                  0,                 0,                  0,                 0,                  0,                  alpha(t5, wg),     beta(t5, wg),     0,                 0,                gamma(t5, wg),     delta(t5, wg)    ],
+        [0,                  0,                 0,                  0,                 0,                  0,                  alpha_dot(t5, wg), beta_dot(t5, wg), 0,                 0,                gamma_dot(t5, wg), delta_dot(t5, wg)],
+        [0,                  0,                 0,                  0,                 0,                  0,                  0,                 0,                alpha(t5, we),     beta(t5, we),     gamma(t5, we),     delta(t5, we)    ],
+        [0,                  0,                 0,                  0,                 0,                  0,                  0,                 0,                alpha_dot(t5, we), beta_dot(t5, we), gamma_dot(t5, we), delta_dot(t5, we)],
+    ])
+    # yapf: enable
+
+    b_reset = np.array([
+        gamma(t3, wg) * i2 + delta(t3, wg) * q2,
+        gamma_dot(t3, wg) * i2 + delta_dot(t3, wg) * q2,
+        gamma(t3, we) * i2 + delta(t3, we) * q2,
+        gamma_dot(t3, we) * i2 + delta_dot(t3, we) * q2,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+    ])
+
+    sol_reset = np.linalg.solve(a_reset, b_reset)
+
+    return np.r_[sol_kick, sol_reset]
 
 
 def ivp_fun(t, y, drive, w0_2):
@@ -159,8 +195,12 @@ def make_t_arr(t0, t1, fs):
 
 t0 = 0.0
 t1 = t0 + 1 / kappa
-t2 = t1 + 1 / kappa
-t3 = t2 + 3.0 / kappa
+t2 = t1 + 0.5 / kappa
+t3 = t2 + 1.0 / kappa
+t4 = t3 + 1.0 / kappa
+t5 = t4 + 0.5 / kappa
+t6 = t5 + 1 / kappa
+
 i2 = 1.0
 q2 = 0.0
 all_sol = solve_all(
@@ -169,9 +209,14 @@ all_sol = solve_all(
     t0=t0,
     t1=t1,
     t2=t2,
+    t3=t3,
+    t4=t4,
+    t5=t5,
 )
 i0, q0 = all_sol[4], all_sol[5]
 i1, q1 = all_sol[10], all_sol[11]
+i3, q3 = all_sol[16], all_sol[17]
+i4, q4 = all_sol[22], all_sol[23]
 
 # first segment: kick 1
 y0 = np.array([0.0, 0.0])
@@ -197,6 +242,30 @@ t23_arr = make_t_arr(t2, t3, fs)
 sol23_g = odeint(ivp_fun, y2_g, t23_arr, args=(d23, wg_2), Dfun=ivp_jac, tfirst=True)
 sol23_e = odeint(ivp_fun, y2_e, t23_arr, args=(d23, we_2), Dfun=ivp_jac, tfirst=True)
 
+# fourth segment: reset 1
+y3_g = sol23_g[-1]
+y3_e = sol23_e[-1]
+d34 = [i3, q3]
+t34_arr = make_t_arr(t3, t4, fs)
+sol34_g = odeint(ivp_fun, y3_g, t34_arr, args=(d34, wg_2), Dfun=ivp_jac, tfirst=True)
+sol34_e = odeint(ivp_fun, y3_e, t34_arr, args=(d34, we_2), Dfun=ivp_jac, tfirst=True)
+
+# fifth segment: reset 3
+y4_g = sol34_g[-1]
+y4_e = sol34_e[-1]
+d45 = [i4, q4]
+t45_arr = make_t_arr(t4, t5, fs)
+sol45_g = odeint(ivp_fun, y4_g, t45_arr, args=(d45, wg_2), Dfun=ivp_jac, tfirst=True)
+sol45_e = odeint(ivp_fun, y4_e, t45_arr, args=(d45, we_2), Dfun=ivp_jac, tfirst=True)
+
+# last segment: free evolution
+y5_g = sol45_g[-1]
+y5_e = sol45_e[-1]
+d56 = [0.0, 0.0]
+t56_arr = make_t_arr(t5, t6, fs)
+sol56_g = odeint(ivp_fun, y5_g, t56_arr, args=(d56, wg_2), Dfun=ivp_jac, tfirst=True)
+sol56_e = odeint(ivp_fun, y5_e, t56_arr, args=(d56, we_2), Dfun=ivp_jac, tfirst=True)
+
 # plot position
 fig, ax = plt.subplots(tight_layout=True)
 ax.plot(t01_arr, sol01_g[:, 0], c="tab:blue", label="|g>")
@@ -205,10 +274,18 @@ ax.plot(t12_arr, sol12_g[:, 0], c="tab:blue")
 ax.plot(t12_arr, sol12_e[:, 0], c="tab:orange")
 ax.plot(t23_arr, sol23_g[:, 0], c="tab:blue")
 ax.plot(t23_arr, sol23_e[:, 0], c="tab:orange")
+ax.plot(t34_arr, sol34_g[:, 0], c="tab:blue")
+ax.plot(t34_arr, sol34_e[:, 0], c="tab:orange")
+ax.plot(t45_arr, sol45_g[:, 0], c="tab:blue")
+ax.plot(t45_arr, sol45_e[:, 0], c="tab:orange")
+ax.plot(t56_arr, sol56_g[:, 0], c="tab:blue")
+ax.plot(t56_arr, sol56_e[:, 0], c="tab:orange")
 ax.axvline(t0, ls='-', c="k", alpha=0.5)
 ax.axvline(t1, ls='-', c="k", alpha=0.5)
 ax.axvline(t2, ls='-', c="k", alpha=0.5)
 ax.axvline(t3, ls='-', c="k", alpha=0.5)
+ax.axvline(t4, ls='-', c="k", alpha=0.5)
+ax.axvline(t5, ls='-', c="k", alpha=0.5)
 ax.grid()
 ax.legend(ncol=2)
 ax.set_xlabel("Time")
