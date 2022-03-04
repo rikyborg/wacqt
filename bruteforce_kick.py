@@ -3,54 +3,61 @@ from __future__ import annotations
 import numpy as np
 from numpy.linalg import solve
 
-def erf(x):
-    duration_k1, duration_k2, duration_r1 = x
-    wr = 2 * np.pi * 6.027848e9 * 1e-9  # GHz
-    chi = -2 * np.pi * 302.25e3 * 1e-9
-    kappa = 2 * np.pi * 455.13e3 * 1e-9
+wr = 2 * np.pi * 6.027848e9 * 1e-9  # GHz
+chi = -2 * np.pi * 302.25e3 * 1e-9
+kappa = 2 * np.pi * 455.13e3 * 1e-9
+i2 = 1.0
+q2 = 1.0
+fs = 60.0
 
-    i2 = 1.0
-    q2 = 1.0
 
-    t0 = 0.0
-    t1 = t0 + duration_k1
-    t2 = t1 + duration_k2
-    t3 = t2
-    t4 = t3 + duration_r1
-    t5 = 1000.0
-    # t1 = t0 + 370.0
-    # t2 = t1 + 130.0
-    # t3 = t2 + 0.0
-    # t4 = t3 + 300.0
-    # t5 = t4 + 200.0
-    # t6 = t5 + 100.0
+def erf(x, total_duration):
+    dur_k1, dur_k2, dur_r1, dur_r2 = x
+    duration_flat = total_duration - (dur_k1 + dur_k2 + dur_r1 + dur_r2)
+
+    assert total_duration > 0
+    assert 0 < dur_k1 < total_duration
+    assert 0 < dur_k2 < total_duration
+    assert 0 < dur_r1 < total_duration
+    assert 0 < dur_r2 < total_duration
+    assert 0 <= duration_flat < total_duration
+
+    t0 = 0
+    t1 = t0 + dur_k1
+    t2 = t1 + dur_k2
+    t3 = t2 + duration_flat
+    t4 = t3 + dur_r1
+    t5 = t4 + dur_r2
+    assert (t5 - t0) == total_duration
+
+    t0 = float(t0)
+    t1 = float(t1)
+    t2 = float(t2)
+    t3 = float(t3)
+    t4 = float(t4)
+    t5 = float(t5)
 
     wg = wr - chi
     we = wr + chi
     wd = wr
 
-    fs = 60.0
     wg_2 = wg * wg
     we_2 = we * we
-    wd_2 = wd * wd
+    # wd_2 = wd * wd
     kappa_2 = kappa * kappa
 
     # in the analytical solution, we assume that the system is underdamped
     assert kappa_2 < 4 * wg_2
     assert kappa_2 < 4 * we_2
 
-
     def tilde(w0: float) -> float:
         return w0 * np.sqrt(1 - (kappa / (2 * w0))**2)
-
 
     def alpha(t: float, w0: float) -> float:
         return np.exp(-kappa * t / 2) * np.cos(tilde(w0) * t)
 
-
     def beta(t: float, w0: float) -> float:
         return -np.exp(-kappa * t / 2) * np.sin(tilde(w0) * t)
-
 
     def gamma(t: float, w0: float) -> float:
         d = (w0**2 - wd**2)**2 + kappa**2 * wd**2
@@ -58,32 +65,25 @@ def erf(x):
         ns = kappa * wd
         return nc / d * np.cos(wd * t) + ns / d * np.sin(wd * t)
 
-
     def delta(t: float, w0: float) -> float:
         d = (w0**2 - wd**2)**2 + kappa**2 * wd**2
         nc = kappa * wd
         ns = w0**2 - wd**2
         return nc / d * np.cos(wd * t) - ns / d * np.sin(wd * t)
 
-
     def alpha_dot(t: float, w0: float) -> float:
         return -kappa / 2 * alpha(t, w0) + tilde(w0) * beta(t, w0)
-
 
     def beta_dot(t: float, w0: float) -> float:
         return -tilde(w0) * alpha(t, w0) - kappa / 2 * beta(t, w0)
 
-
     def gamma_dot(t: float, w0: float) -> float:
         return wd * delta(t, w0)
-
 
     def delta_dot(t: float, w0: float) -> float:
         return -wd * gamma(t, w0)
 
-
-    def solve_all(i2: float, q2: float, t0: float, t1: float, t2: float, t3: float,
-                t4: float, t5: float):
+    def solve_all(i2: float, q2: float, t0: float, t1: float, t2: float, t3: float, t4: float, t5: float):
         # yapf: disable
         a_kick = np.array([
             [alpha(t0, wg),      beta(t0, wg),      0,                  0,                 gamma(t0, wg),      delta(t0, wg),      0,                 0,                0,                 0,                0,                 0                ],
@@ -154,54 +154,6 @@ def erf(x):
 
         return np.r_[sol_kick, sol_reset]
 
-
-    def ivp_fun(t, y, drive, w0_2):
-        """ The ODE function ydot = fun(t, y).
-
-        Parameters
-        ----------
-        t : float
-            time
-        y : 2-array of float
-            state vector
-        drive : 2-array of float
-            drive I and Q amplitudes
-
-        Returns
-        -------
-        2-array of float
-            the derivative of the state vector
-        """
-        drive_term = drive[0] * np.cos(wd * t) - drive[1] * np.sin(wd * t)
-        return np.array([
-            y[1],
-            -kappa * y[1] - w0_2 * y[0] + drive_term,
-        ])
-
-
-    def ivp_jac(t, y, drive, w0_2):
-        """ The Jacobian matrix for the ODE.
-
-        Parameters
-        ----------
-        t : float
-            time
-        y : 2-array of float
-            state vector
-        drive : 2-array of float
-            drive I and Q amplitudes
-
-        Returns
-        -------
-        2x2-matrix of float
-            the Jacobian
-        """
-        return np.array([
-            [0.0, 1.0],
-            [-w0_2, -kappa],
-        ])
-
-
     def make_t_arr(t0, t1, fs):
         dt = 1 / fs
         n0 = int(round(t0 * fs))
@@ -209,30 +161,24 @@ def erf(x):
         n_arr = np.arange(n0, n1)
         return dt * n_arr
 
-
+    # yapf: disable
     all_sol = solve_all(
-        i2=i2,
-        q2=q2,
-        t0=t0,
-        t1=t1,
-        t2=t2,
-        t3=t3,
-        t4=t4,
-        t5=t5,
+        i2=i2, q2=q2,
+        t0=t0, t1=t1, t2=t2, t3=t3, t4=t4, t5=t5,
     )
     (
         a0_g, b0_g, a0_e, b0_e, i0, q0,
         a1_g, b1_g, a1_e, b1_e, i1, q1,
         a3_g, b3_g, a3_e, b3_e, i3, q3,
         a4_g, b4_g, a4_e, b4_e, i4, q4,
-     ) = all_sol
+    ) = all_sol
+    # yapf: enable
 
     t01_arr = make_t_arr(t0, t1, fs)
     t12_arr = make_t_arr(t1, t2, fs)
     # no flat
     t34_arr = make_t_arr(t3, t4, fs)
     t45_arr = make_t_arr(t4, t5, fs)
-
 
     x01_g = a0_g * alpha(t01_arr, wg) + b0_g * beta(t01_arr, wg) + i0 * gamma(t01_arr, wg) + q0 * delta(t01_arr, wg)
     x01_e = a0_e * alpha(t01_arr, we) + b0_e * beta(t01_arr, we) + i0 * gamma(t01_arr, we) + q0 * delta(t01_arr, we)
@@ -243,45 +189,40 @@ def erf(x):
     x45_g = a4_g * alpha(t45_arr, wg) + b4_g * beta(t45_arr, wg) + i4 * gamma(t45_arr, wg) + q4 * delta(t45_arr, wg)
     x45_e = a4_e * alpha(t45_arr, we) + b4_e * beta(t45_arr, we) + i4 * gamma(t45_arr, we) + q4 * delta(t45_arr, we)
 
-    v01_g = a0_g * alpha_dot(t01_arr, wg) + b0_g * beta_dot(t01_arr, wg) + i0 * gamma_dot(t01_arr, wg) + q0 * delta_dot(t01_arr, wg)
-    v01_e = a0_e * alpha_dot(t01_arr, we) + b0_e * beta_dot(t01_arr, we) + i0 * gamma_dot(t01_arr, we) + q0 * delta_dot(t01_arr, we)
-    v12_g = a1_g * alpha_dot(t12_arr, wg) + b1_g * beta_dot(t12_arr, wg) + i1 * gamma_dot(t12_arr, wg) + q1 * delta_dot(t12_arr, wg)
-    v12_e = a1_e * alpha_dot(t12_arr, we) + b1_e * beta_dot(t12_arr, we) + i1 * gamma_dot(t12_arr, we) + q1 * delta_dot(t12_arr, we)
-    v34_g = a3_g * alpha_dot(t34_arr, wg) + b3_g * beta_dot(t34_arr, wg) + i3 * gamma_dot(t34_arr, wg) + q3 * delta_dot(t34_arr, wg)
-    v34_e = a3_e * alpha_dot(t34_arr, we) + b3_e * beta_dot(t34_arr, we) + i3 * gamma_dot(t34_arr, we) + q3 * delta_dot(t34_arr, we)
-    v45_g = a4_g * alpha_dot(t45_arr, wg) + b4_g * beta_dot(t45_arr, wg) + i4 * gamma_dot(t45_arr, wg) + q4 * delta_dot(t45_arr, wg)
-    v45_e = a4_e * alpha_dot(t45_arr, we) + b4_e * beta_dot(t45_arr, we) + i4 * gamma_dot(t45_arr, we) + q4 * delta_dot(t45_arr, we)
+    v01_g = a0_g * alpha_dot(t01_arr, wg) + b0_g * beta_dot(t01_arr, wg) + i0 * gamma_dot(
+        t01_arr, wg) + q0 * delta_dot(t01_arr, wg)
+    v01_e = a0_e * alpha_dot(t01_arr, we) + b0_e * beta_dot(t01_arr, we) + i0 * gamma_dot(
+        t01_arr, we) + q0 * delta_dot(t01_arr, we)
+    v12_g = a1_g * alpha_dot(t12_arr, wg) + b1_g * beta_dot(t12_arr, wg) + i1 * gamma_dot(
+        t12_arr, wg) + q1 * delta_dot(t12_arr, wg)
+    v12_e = a1_e * alpha_dot(t12_arr, we) + b1_e * beta_dot(t12_arr, we) + i1 * gamma_dot(
+        t12_arr, we) + q1 * delta_dot(t12_arr, we)
+    v34_g = a3_g * alpha_dot(t34_arr, wg) + b3_g * beta_dot(t34_arr, wg) + i3 * gamma_dot(
+        t34_arr, wg) + q3 * delta_dot(t34_arr, wg)
+    v34_e = a3_e * alpha_dot(t34_arr, we) + b3_e * beta_dot(t34_arr, we) + i3 * gamma_dot(
+        t34_arr, we) + q3 * delta_dot(t34_arr, we)
+    v45_g = a4_g * alpha_dot(t45_arr, wg) + b4_g * beta_dot(t45_arr, wg) + i4 * gamma_dot(
+        t45_arr, wg) + q4 * delta_dot(t45_arr, wg)
+    v45_e = a4_e * alpha_dot(t45_arr, we) + b4_e * beta_dot(t45_arr, we) + i4 * gamma_dot(
+        t45_arr, we) + q4 * delta_dot(t45_arr, we)
 
-    t_arr = np.r_[
-        t01_arr,
-        t12_arr,
-        t34_arr,
-        t45_arr,
-    ]
-    x_g = np.r_[
-        x01_g,
-        x12_g,
-        x34_g,
-        x45_g,
-    ]
-    x_e = np.r_[
-        x01_e,
-        x12_e,
-        x34_e,
-        x45_e,
-    ]
-    v_g = np.r_[
-        v01_g,
-        v12_g,
-        v34_g,
-        v45_g,
-    ]
-    v_e = np.r_[
-        v01_e,
-        v12_e,
-        v34_e,
-        v45_e,
-    ]
+    if duration_flat > 0:
+        t23_arr = make_t_arr(t2, t3, fs)
+        x23_g = i2 * gamma(t23_arr, wg) + q2 * delta(t23_arr, wg)
+        x23_e = i2 * gamma(t23_arr, we) + q2 * delta(t23_arr, we)
+        v23_g = i2 * gamma_dot(t23_arr, wg) + q2 * delta_dot(t23_arr, wg)
+        v23_e = i2 * gamma_dot(t23_arr, we) + q2 * delta_dot(t23_arr, we)
+    else:
+        x23_g = np.array([])
+        x23_e = np.array([])
+        v23_g = np.array([])
+        v23_e = np.array([])
+
+    # t_arr = np.r_[t01_arr, t12_arr, t34_arr, t45_arr, ]
+    x_g = np.r_[x01_g, x12_g, x23_g, x34_g, x45_g, ]
+    x_e = np.r_[x01_e, x12_e, x23_e, x34_e, x45_e, ]
+    v_g = np.r_[v01_g, v12_g, v23_g, v34_g, v45_g, ]
+    v_e = np.r_[v01_e, v12_e, v23_e, v34_e, v45_e, ]
     v_g /= wd
     v_e /= wd
     sep = np.sqrt((x_g - x_e)**2 + (v_g - v_e)**2)
@@ -291,21 +232,54 @@ def erf(x):
     s_norm = np.sum(sep) / d_max / fs
     return s_norm
 
+
 x_best = None
 s_best = 0.0
-step = 10
-for duration_k1 in range(step, 1_000, step):
-    if duration_k1 > 994:
-        break
-    for duration_k2  in range(step, 1_000, step):
-        if duration_k1 + duration_k2 > 996:
+pulse_len = 1_200
+# steps = np.array([100, 50, 10, 2])
+steps = np.array([128, 64, 32, 16, 8, 4, 2])
+prev_print_len = 0
+
+for ss, step in enumerate(steps):
+    if ss == 0:
+        start = np.repeat(step, 4)
+        stop = np.repeat(pulse_len, 4)
+    else:
+        start = x_best - steps[ss - 1]
+        stop = x_best + steps[ss - 1] + 1
+        start[start < step] = step
+        stop[stop > pulse_len] = pulse_len
+    print(f"from {start} to {stop} in steps of {step}")
+
+    for dur_k1 in range(start[0], stop[0], step):
+        if dur_k1 > (pulse_len - 6):
             break
-        for duration_r1  in range(step, 1_000, step):
-            if duration_k1 + duration_k2 + duration_r1 > 998:
+        for dur_k2 in range(start[1], stop[1], step):
+            if dur_k1 + dur_k2 > (pulse_len - 4):
                 break
-            x = [duration_k1, duration_k2, duration_r1]
-            s = erf(x)
-            print(f"[{x[0]:03d} - {x[1]:03d} - {x[2]:03d}] \t {s:06.1f} \t {s_best:06.1f}")
-            if s > s_best:
-                s_best = s
-                x_best = x
+            for dur_r1 in range(start[2], stop[2], step):
+                if dur_k1 + dur_k2 + dur_r1 > (pulse_len - 2):
+                    break
+                for dur_r2 in range(start[3], stop[3], step):
+                    if dur_k1 + dur_k2 + dur_r1 + dur_r2 > pulse_len:
+                        break
+                    x = np.array([dur_k1, dur_k2, dur_r1, dur_r2])
+                    s = erf(x, pulse_len)
+
+                    if s > s_best:
+                        s_best = s
+                        x_best = x
+
+                    msg = f"x = [{x[0]:03d}, {x[1]:03d}, {x[2]:03d}, {x[3]:03d}] -- s = {s:06.1f} -- s_best = {s_best:06.1f}"
+                    print_len = len(msg)
+                    if print_len < prev_print_len:
+                        msg += " " * (prev_print_len - print_len)
+                    print("\r" + msg, end="\r", flush=True)
+                    prev_print_len = print_len
+
+    msg = f"best {s_best:.2f} at {x_best}, flat {pulse_len - x_best.sum()}"
+    print_len = len(msg)
+    if print_len < prev_print_len:
+        msg += " " * (prev_print_len - print_len)
+    print(msg)
+    print()
