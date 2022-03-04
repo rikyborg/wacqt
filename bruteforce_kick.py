@@ -3,6 +3,8 @@ from __future__ import annotations
 import numpy as np
 from numpy.linalg import solve
 
+pulse_len = 1_400
+
 wr = 2 * np.pi * 6.027848e9 * 1e-9  # GHz
 chi = -2 * np.pi * 302.25e3 * 1e-9
 kappa = 2 * np.pi * 455.13e3 * 1e-9
@@ -13,19 +15,19 @@ fs = 60.0
 
 def erf(x, total_duration):
     dur_k1, dur_k2, dur_r1, dur_r2 = x
-    duration_flat = total_duration - (dur_k1 + dur_k2 + dur_r1 + dur_r2)
+    dur_fl = total_duration - (dur_k1 + dur_k2 + dur_r1 + dur_r2)
 
     assert total_duration > 0
     assert 0 < dur_k1 < total_duration
     assert 0 < dur_k2 < total_duration
     assert 0 < dur_r1 < total_duration
     assert 0 < dur_r2 < total_duration
-    assert 0 <= duration_flat < total_duration
+    assert 0 <= dur_fl < total_duration
 
     t0 = 0
     t1 = t0 + dur_k1
     t2 = t1 + dur_k2
-    t3 = t2 + duration_flat
+    t3 = t2 + dur_fl
     t4 = t3 + dur_r1
     t5 = t4 + dur_r2
     assert (t5 - t0) == total_duration
@@ -206,7 +208,7 @@ def erf(x, total_duration):
     v45_e = a4_e * alpha_dot(t45_arr, we) + b4_e * beta_dot(t45_arr, we) + i4 * gamma_dot(
         t45_arr, we) + q4 * delta_dot(t45_arr, we)
 
-    if duration_flat > 0:
+    if dur_fl > 0:
         t23_arr = make_t_arr(t2, t3, fs)
         x23_g = i2 * gamma(t23_arr, wg) + q2 * delta(t23_arr, wg)
         x23_e = i2 * gamma(t23_arr, we) + q2 * delta(t23_arr, we)
@@ -230,12 +232,12 @@ def erf(x, total_duration):
     d_arr = np.array([i0, q0, i1, q1, i2, q2, i3, q3, i4, q4])
     d_max = np.max(np.abs(d_arr))
     s_norm = np.sum(sep) / d_max / fs
-    return s_norm
+    return s_norm, np.frombuffer(d_arr / d_max, np.complex128)
 
 
-x_best = None
+x_best = np.zeros(4, np.int64)
+a_best = np.zeros(5, np.complex128)
 s_best = 0.0
-pulse_len = 1_200
 # steps = np.array([100, 50, 10, 2])
 steps = np.array([128, 64, 32, 16, 8, 4, 2])
 prev_print_len = 0
@@ -264,11 +266,12 @@ for ss, step in enumerate(steps):
                     if dur_k1 + dur_k2 + dur_r1 + dur_r2 > pulse_len:
                         break
                     x = np.array([dur_k1, dur_k2, dur_r1, dur_r2])
-                    s = erf(x, pulse_len)
+                    s, amps = erf(x, pulse_len)
 
                     if s > s_best:
                         s_best = s
                         x_best = x
+                        a_best = amps
 
                     msg = f"x = [{x[0]:03d}, {x[1]:03d}, {x[2]:03d}, {x[3]:03d}] -- s = {s:06.1f} -- s_best = {s_best:06.1f}"
                     print_len = len(msg)
@@ -283,3 +286,28 @@ for ss, step in enumerate(steps):
         msg += " " * (prev_print_len - print_len)
     print(msg)
     print()
+
+(dur_k1, dur_k2, dur_r1, dur_r2) = x_best
+(amp_k1, amp_k2, amp_fl, amp_r1, amp_r2) = a_best
+dur_fl = pulse_len - x_best.sum()
+
+print("# ***************")
+print(f"# *** {pulse_len:4d} ns ***")
+print("# ***************")
+print()
+print(f"# separation = {s_best:.0f} arb. units")
+print()
+print("# times, ns")
+print(f"{dur_k1 = }")
+print(f"{dur_k2 = }")
+print(f"{dur_fl = }")
+print(f"{dur_r1 = }")
+print(f"{dur_r2 = }")
+print()
+print("# amplitudes, FS")
+print(f"{amp_k1 = :+.5f}")
+print(f"{amp_k2 = :+.5f}")
+print(f"{amp_fl = :+.5f}")
+print(f"{amp_r1 = :+.5f}")
+print(f"{amp_r2 = :+.5f}")
+print()
