@@ -3,17 +3,29 @@ from __future__ import annotations
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.integrate import odeint
+from numpy.linalg import solve
 # from scipy.linalg import solve
 
-# w0 = 2 * np.pi * 1.0
-wr = 2 * np.pi * 1.0
-kappa = 0.1
-chi = -0.05
+wr = 2 * np.pi * 6.027848e9 * 1e-9  # GHz
+chi = -2 * np.pi * 302.25e3 * 1e-9
+kappa = 2 * np.pi * 455.13e3 * 1e-9
+
+i2 = 1.0
+q2 = 1.0
+
+t0 = 0.0
+t1 = t0 + 520.0
+t2 = t1 + 120.0
+t3 = t2 + 0.0
+t4 = t3 + 340.0
+t5 = t4 + 220.0
+t6 = t5 + 100.0
+
 wg = wr - chi
 we = wr + chi
 wd = wr
 
-fs = 20
+fs = 120
 wg_2 = wg * wg
 we_2 = we * we
 wd_2 = wd * wd
@@ -51,11 +63,11 @@ def delta(t: float, w0: float) -> float:
 
 
 def alpha_dot(t: float, w0: float) -> float:
-    return alpha(t, w0) * (kappa**2 / 4 - tilde(w0)**2) - beta(t, w0) * kappa * tilde(w0)
+    return -kappa / 2 * alpha(t, w0) + tilde(w0) * beta(t, w0)
 
 
 def beta_dot(t: float, w0: float) -> float:
-    return alpha(t, w0) * kappa * tilde(w0) - beta(t, w0) * (tilde(w0)**2 - kappa**2 / 4)
+    return -tilde(w0) * alpha(t, w0) - kappa / 2 * beta(t, w0)
 
 
 def gamma_dot(t: float, w0: float) -> float:
@@ -66,7 +78,8 @@ def delta_dot(t: float, w0: float) -> float:
     return -wd * gamma(t, w0)
 
 
-def solve_all(i2: float, q2: float, t0: float, t1: float, t2: float, t3: float, t4: float, t5: float):
+def solve_all(i2: float, q2: float, t0: float, t1: float, t2: float, t3: float,
+              t4: float, t5: float):
     # yapf: disable
     a_kick = np.array([
         [alpha(t0, wg),      beta(t0, wg),      0,                  0,                 gamma(t0, wg),      delta(t0, wg),      0,                 0,                0,                 0,                0,                 0                ],
@@ -99,7 +112,7 @@ def solve_all(i2: float, q2: float, t0: float, t1: float, t2: float, t3: float, 
         gamma_dot(t2, we) * i2 + delta_dot(t2, we) * q2,
     ])
 
-    sol_kick = np.linalg.solve(a_kick, b_kick)
+    sol_kick = solve(a_kick, b_kick)
 
     # yapf: disable
     a_reset = np.array([
@@ -133,7 +146,7 @@ def solve_all(i2: float, q2: float, t0: float, t1: float, t2: float, t3: float, 
         0,
     ])
 
-    sol_reset = np.linalg.solve(a_reset, b_reset)
+    sol_reset = solve(a_reset, b_reset)
 
     return np.r_[sol_kick, sol_reset]
 
@@ -193,16 +206,6 @@ def make_t_arr(t0, t1, fs):
     return dt * n_arr
 
 
-t0 = 0.0
-t1 = t0 + 1 / kappa
-t2 = t1 + 0.5 / kappa
-t3 = t2 + 1.0 / kappa
-t4 = t3 + 1.0 / kappa
-t5 = t4 + 0.5 / kappa
-t6 = t5 + 1 / kappa
-
-i2 = 1.0
-q2 = 0.0
 all_sol = solve_all(
     i2=i2,
     q2=q2,
@@ -220,7 +223,6 @@ i4, q4 = all_sol[22], all_sol[23]
 
 # first segment: kick 1
 y0 = np.array([0.0, 0.0])
-t0 = 0.0
 d01 = [i0, q0]
 t01_arr = make_t_arr(t0, t1, fs)
 sol01_g = odeint(ivp_fun, y0, t01_arr, args=(d01, wg_2), Dfun=ivp_jac, tfirst=True)
@@ -238,9 +240,15 @@ sol12_e = odeint(ivp_fun, y1_e, t12_arr, args=(d12, we_2), Dfun=ivp_jac, tfirst=
 y2_g = sol12_g[-1]
 y2_e = sol12_e[-1]
 d23 = [i2, q2]
-t23_arr = make_t_arr(t2, t3, fs)
-sol23_g = odeint(ivp_fun, y2_g, t23_arr, args=(d23, wg_2), Dfun=ivp_jac, tfirst=True)
-sol23_e = odeint(ivp_fun, y2_e, t23_arr, args=(d23, we_2), Dfun=ivp_jac, tfirst=True)
+if t3 > t2:
+    t23_arr = make_t_arr(t2, t3, fs)
+    sol23_g = odeint(ivp_fun, y2_g, t23_arr, args=(d23, wg_2), Dfun=ivp_jac, tfirst=True)
+    sol23_e = odeint(ivp_fun, y2_e, t23_arr, args=(d23, we_2), Dfun=ivp_jac, tfirst=True)
+else:
+    assert t2 == t3
+    t23_arr = np.array([t2, t3])
+    sol23_g = np.vstack((y2_g, y2_g))
+    sol23_e = np.vstack((y2_e, y2_e))
 
 # fourth segment: reset 1
 y3_g = sol23_g[-1]
@@ -266,20 +274,48 @@ t56_arr = make_t_arr(t5, t6, fs)
 sol56_g = odeint(ivp_fun, y5_g, t56_arr, args=(d56, wg_2), Dfun=ivp_jac, tfirst=True)
 sol56_e = odeint(ivp_fun, y5_e, t56_arr, args=(d56, we_2), Dfun=ivp_jac, tfirst=True)
 
+# complex
+sol01_g = np.frombuffer(sol01_g, np.complex128)
+sol01_e = np.frombuffer(sol01_e, np.complex128)
+sol12_g = np.frombuffer(sol12_g, np.complex128)
+sol12_e = np.frombuffer(sol12_e, np.complex128)
+sol23_g = np.frombuffer(sol23_g, np.complex128)
+sol23_e = np.frombuffer(sol23_e, np.complex128)
+sol34_g = np.frombuffer(sol34_g, np.complex128)
+sol34_e = np.frombuffer(sol34_e, np.complex128)
+sol45_g = np.frombuffer(sol45_g, np.complex128)
+sol45_e = np.frombuffer(sol45_e, np.complex128)
+sol56_g = np.frombuffer(sol56_g, np.complex128)
+sol56_e = np.frombuffer(sol56_e, np.complex128)
+
+# units
+sol01_g.imag /= wd
+sol01_e.imag /= wd
+sol12_g.imag /= wd
+sol12_e.imag /= wd
+sol23_g.imag /= wd
+sol23_e.imag /= wd
+sol34_g.imag /= wd
+sol34_e.imag /= wd
+sol45_g.imag /= wd
+sol45_e.imag /= wd
+sol56_g.imag /= wd
+sol56_e.imag /= wd
+
 # plot position
 fig, ax = plt.subplots(tight_layout=True)
-ax.plot(t01_arr, sol01_g[:, 0], c="tab:blue", label="|g>")
-ax.plot(t01_arr, sol01_e[:, 0], c="tab:orange", label="|e>")
-ax.plot(t12_arr, sol12_g[:, 0], c="tab:blue")
-ax.plot(t12_arr, sol12_e[:, 0], c="tab:orange")
-ax.plot(t23_arr, sol23_g[:, 0], c="tab:blue")
-ax.plot(t23_arr, sol23_e[:, 0], c="tab:orange")
-ax.plot(t34_arr, sol34_g[:, 0], c="tab:blue")
-ax.plot(t34_arr, sol34_e[:, 0], c="tab:orange")
-ax.plot(t45_arr, sol45_g[:, 0], c="tab:blue")
-ax.plot(t45_arr, sol45_e[:, 0], c="tab:orange")
-ax.plot(t56_arr, sol56_g[:, 0], c="tab:blue")
-ax.plot(t56_arr, sol56_e[:, 0], c="tab:orange")
+ax.plot(t01_arr, sol01_g.real, c="tab:blue", label="|g>")
+ax.plot(t01_arr, sol01_e.real, c="tab:orange", label="|e>")
+ax.plot(t12_arr, sol12_g.real, c="tab:blue")
+ax.plot(t12_arr, sol12_e.real, c="tab:orange")
+ax.plot(t23_arr, sol23_g.real, c="tab:blue")
+ax.plot(t23_arr, sol23_e.real, c="tab:orange")
+ax.plot(t34_arr, sol34_g.real, c="tab:blue")
+ax.plot(t34_arr, sol34_e.real, c="tab:orange")
+ax.plot(t45_arr, sol45_g.real, c="tab:blue")
+ax.plot(t45_arr, sol45_e.real, c="tab:orange")
+ax.plot(t56_arr, sol56_g.real, c="tab:blue")
+ax.plot(t56_arr, sol56_e.real, c="tab:orange")
 ax.axvline(t0, ls='-', c="k", alpha=0.5)
 ax.axvline(t1, ls='-', c="k", alpha=0.5)
 ax.axvline(t2, ls='-', c="k", alpha=0.5)
@@ -291,3 +327,79 @@ ax.legend(ncol=2)
 ax.set_xlabel("Time")
 ax.set_ylabel("Position")
 fig.show()
+
+# plot energy
+n01_g = np.abs(sol01_g)**2 / 2
+n01_e = np.abs(sol01_e)**2 / 2
+n12_g = np.abs(sol12_g)**2 / 2
+n12_e = np.abs(sol12_e)**2 / 2
+n23_g = np.abs(sol23_g)**2 / 2
+n23_e = np.abs(sol23_e)**2 / 2
+n34_g = np.abs(sol34_g)**2 / 2
+n34_e = np.abs(sol34_e)**2 / 2
+n45_g = np.abs(sol45_g)**2 / 2
+n45_e = np.abs(sol45_e)**2 / 2
+n56_g = np.abs(sol56_g)**2 / 2
+n56_e = np.abs(sol56_e)**2 / 2
+
+fig2, ax2 = plt.subplots(tight_layout=True)
+ax2.plot(t01_arr, n01_g, c="tab:blue", label="|g>")
+ax2.plot(t01_arr, n01_e, c="tab:orange", label="|e>")
+ax2.plot(t12_arr, n12_g, c="tab:blue")
+ax2.plot(t12_arr, n12_e, c="tab:orange")
+ax2.plot(t23_arr, n23_g, c="tab:blue")
+ax2.plot(t23_arr, n23_e, c="tab:orange")
+ax2.plot(t34_arr, n34_g, c="tab:blue")
+ax2.plot(t34_arr, n34_e, c="tab:orange")
+ax2.plot(t45_arr, n45_g, c="tab:blue")
+ax2.plot(t45_arr, n45_e, c="tab:orange")
+ax2.plot(t56_arr, n56_g, c="tab:blue")
+ax2.plot(t56_arr, n56_e, c="tab:orange")
+ax2.axvline(t0, ls='-', c="k", alpha=0.5)
+ax2.axvline(t1, ls='-', c="k", alpha=0.5)
+ax2.axvline(t2, ls='-', c="k", alpha=0.5)
+ax2.axvline(t3, ls='-', c="k", alpha=0.5)
+ax2.axvline(t4, ls='-', c="k", alpha=0.5)
+ax2.axvline(t5, ls='-', c="k", alpha=0.5)
+ax2.grid()
+ax2.legend(ncol=2)
+ax2.set_xlabel("Time")
+ax2.set_ylabel("Energy")
+fig2.show()
+
+# separation
+s01 = np.abs(sol01_g - sol01_e)
+s12 = np.abs(sol12_g - sol12_e)
+s23 = np.abs(sol23_g - sol23_e)
+s34 = np.abs(sol34_g - sol34_e)
+s45 = np.abs(sol45_g - sol45_e)
+s56 = np.abs(sol56_g - sol56_e)
+s_all = np.r_[s01[:-1], s12[:-1], s23[:-1], s34[:-1], s45[:-1], s56[:-1]]
+
+d_arr = np.array([i0, q0, i1, q1, i2, q2, i3, q3, i4, q4])
+d_max = np.max(np.abs(d_arr))
+print(np.sum(s_all) / d_max / fs)
+
+fig3, ax3 = plt.subplots(tight_layout=True)
+ax3.plot(t01_arr, s01, c="tab:blue")
+ax3.plot(t12_arr, s12, c="tab:blue")
+ax3.plot(t23_arr, s23, c="tab:blue")
+ax3.plot(t34_arr, s34, c="tab:blue")
+ax3.plot(t45_arr, s45, c="tab:blue")
+ax3.plot(t56_arr, s56, c="tab:blue")
+ax3.plot(t01_arr, s01 / d_max, c="tab:green")
+ax3.plot(t12_arr, s12 / d_max, c="tab:green")
+ax3.plot(t23_arr, s23 / d_max, c="tab:green")
+ax3.plot(t34_arr, s34 / d_max, c="tab:green")
+ax3.plot(t45_arr, s45 / d_max, c="tab:green")
+ax3.plot(t56_arr, s56 / d_max, c="tab:green")
+ax3.axvline(t0, ls='-', c="k", alpha=0.5)
+ax3.axvline(t1, ls='-', c="k", alpha=0.5)
+ax3.axvline(t2, ls='-', c="k", alpha=0.5)
+ax3.axvline(t3, ls='-', c="k", alpha=0.5)
+ax3.axvline(t4, ls='-', c="k", alpha=0.5)
+ax3.axvline(t5, ls='-', c="k", alpha=0.5)
+ax3.grid()
+ax3.set_xlabel("Time")
+ax3.set_ylabel("Separation")
+fig3.show()
