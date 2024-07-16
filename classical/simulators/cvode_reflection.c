@@ -7,8 +7,7 @@
 #include <nvector/nvector_serial.h>    /* access to serial N_Vector            */
 #include <sunmatrix/sunmatrix_dense.h> /* access to dense SUNMatrix            */
 #include <sunlinsol/sunlinsol_dense.h> /* access to dense SUNLinearSolver      */
-#include <cvode/cvode_direct.h>        /* access to CVDls interface            */
-#include <sundials/sundials_types.h>   /* defs. of realtype, sunindextype      */
+#include <sundials/sundials_types.h>   /* defs. of sunrealtype, sunindextype      */
 
 #include <gsl/gsl_spline.h>
 
@@ -49,21 +48,21 @@ typedef struct SimPara {
     int stiff_equation;  // bool
 
     /* Circuit */
-    realtype R0;  // ohm
-    realtype Cl;  // F
-    realtype R1;  // ohm
-    realtype L1;  // H
-    realtype C1;  // F
+    sunrealtype R0;  // ohm
+    sunrealtype Cl;  // F
+    sunrealtype R1;  // ohm
+    sunrealtype L1;  // H
+    sunrealtype C1;  // F
 
     /* Drive */
     int drive_id;  // ID_LOCKIN, ID_DRIVE_V
     // Lockin
     int nr_drives;
-    realtype* w_arr;  // rad/s
-    realtype* A_arr;  // V
-    realtype* P_arr;  // rad
+    sunrealtype* w_arr;  // rad/s
+    sunrealtype* A_arr;  // V
+    sunrealtype* P_arr;  // rad
     // Drive_V or Drive_dVdt
-    realtype* drive_V_arr;  // V or V/s
+    sunrealtype* drive_V_arr;  // V or V/s
     gsl_spline* drive_spline;  // internal
     gsl_interp_accel* drive_acc;  // internal
 
@@ -71,32 +70,32 @@ typedef struct SimPara {
     int sys_id;  // ID_LINEAR, ID_DUFFING, ID_JOSEPHSON or ID_JOSEPHSON_BOTH
 
     /* Duffing: V/L * (1. - duff * V*V) */
-    realtype duff1;  // V^-2
+    sunrealtype duff1;  // V^-2
 
     /* Josephson */
-    realtype phi0;
+    sunrealtype phi0;
 
     /* Thermal noise */
     int add_thermal_noise;  // bool
-    realtype* noise0_arr;  // V
+    sunrealtype* noise0_arr;  // V
     gsl_spline* noise0_spline;  // internal
     gsl_interp_accel* noise0_acc;  // internal
-    realtype* noise1_arr;  // V
+    sunrealtype* noise1_arr;  // V
     gsl_spline* noise1_spline;  // internal
     gsl_interp_accel* noise1_acc;  // internal
 
     /* Other internal */
-    realtype b[NEQ];
-    realtype a[NEQ][NEQ];
+    sunrealtype b[NEQ];
+    sunrealtype a[NEQ][NEQ];
 } SimPara;
 
 
 static int init_para(SimPara* para) {
-    realtype cL = para->Cl;
-    realtype r1 = para->R1;
-    realtype l1 = para->L1;
-    realtype c1 = para->C1;
-    realtype r0 = para->R0;
+    sunrealtype cL = para->Cl;
+    sunrealtype r1 = para->R1;
+    sunrealtype l1 = para->L1;
+    sunrealtype c1 = para->C1;
+    sunrealtype r0 = para->R0;
 
     para->b[0] = (c1 + cL) / (c1 * cL * r0);
     para->b[1] = 0.;
@@ -118,25 +117,24 @@ static int init_para(SimPara* para) {
 }
 
 /* Functions Called by the Solver */
-static realtype V_drive(realtype t, void* user_data);
-static realtype V_noise(realtype t, int node, void* user_data);
-
+static sunrealtype V_drive(sunrealtype t, void* user_data);
+static sunrealtype V_noise(sunrealtype t, int node, void* user_data);
 
 /* Private function to check function return values */
-static int check_flag(void *flagvalue, char *funcname, int opt);
+static int check_retval(void* returnvalue, const char* funcname, int opt);
 
-static realtype V_drive(realtype t, void* user_data) {
+static sunrealtype V_drive(sunrealtype t, void* user_data) {
     SimPara* para = (SimPara*) user_data;
     int drive_id = para->drive_id;
     if (drive_id==ID_NO_DRIVE) {
         return 0.;
     } else if (drive_id==ID_LOCKIN) {
         int nr_drives = para->nr_drives;
-        realtype* A_arr = para->A_arr;
-        realtype* w_arr = para->w_arr;
-        realtype* P_arr = para->P_arr;
+        sunrealtype* A_arr = para->A_arr;
+        sunrealtype* w_arr = para->w_arr;
+        sunrealtype* P_arr = para->P_arr;
 
-        realtype ret = 0.;
+        sunrealtype ret = 0.;
         for (int i=0; i<nr_drives; i++) {
             ret += A_arr[i] * cos(w_arr[i]*t + P_arr[i]);
         }
@@ -147,7 +145,7 @@ static realtype V_drive(realtype t, void* user_data) {
     }
 }
 
-static realtype V_noise(realtype t, int node, void* user_data) {
+static sunrealtype V_noise(sunrealtype t, int node, void* user_data) {
     SimPara* para = (SimPara*) user_data;
     if (node == 1) {
         return gsl_spline_eval(para->noise1_spline, t, para->noise1_acc);
@@ -157,10 +155,10 @@ static realtype V_noise(realtype t, int node, void* user_data) {
 }
 
 
-static int ode_linear(realtype t, N_Vector y, N_Vector ydot, void* user_data) {
+static int ode_linear(sunrealtype t, N_Vector y, N_Vector ydot, void* user_data) {
     SimPara* para = (SimPara*) user_data;
 
-    realtype Vg = V_drive(t, para);
+    sunrealtype Vg = V_drive(t, para);
 
     for (int ii=0; ii<NEQ; ii++) {
         NV_Ith_S(ydot, ii) = 0.;
@@ -172,8 +170,8 @@ static int ode_linear(realtype t, N_Vector y, N_Vector ydot, void* user_data) {
 
     /* Add noise */
     if (para->add_thermal_noise == true) {
-        realtype Vn0 = V_noise(t, 0, para);
-        realtype Vn1 = V_noise(t, 1, para);
+        sunrealtype Vn0 = V_noise(t, 0, para);
+        sunrealtype Vn1 = V_noise(t, 1, para);
         NV_Ith_S(ydot, 0) += para->a[0][0] * Vn0;
         NV_Ith_S(ydot, 0) += para->a[0][2] * Vn1;
         NV_Ith_S(ydot, 2) += para->a[2][0] * Vn0;
@@ -184,7 +182,7 @@ static int ode_linear(realtype t, N_Vector y, N_Vector ydot, void* user_data) {
 }
 
 
-static int jac_linear(realtype t, N_Vector y, N_Vector fy, SUNMatrix J,
+static int jac_linear(sunrealtype t, N_Vector y, N_Vector fy, SUNMatrix J,
                       void *user_data, N_Vector tmp1, N_Vector tmp2, N_Vector tmp3) {
     SimPara* para = (SimPara*) user_data;
 
@@ -197,14 +195,14 @@ static int jac_linear(realtype t, N_Vector y, N_Vector fy, SUNMatrix J,
     return(0);
 }
 
-static int ode_duffing(realtype t, N_Vector y, N_Vector ydot, void* user_data) {
+static int ode_duffing(sunrealtype t, N_Vector y, N_Vector ydot, void* user_data) {
     SimPara* para = (SimPara*) user_data;
 
     /* First do the linear part */
     ode_linear(t, y, ydot, user_data);
 
     /* Then add the Duffing terms */
-    realtype P1 = NV_Ith_S(y, 1);
+    sunrealtype P1 = NV_Ith_S(y, 1);
     for (int ii=0; ii<NEQ; ii++) {
         NV_Ith_S(ydot, ii) += -para->duff1 * para->a[ii][1] * P1*P1*P1;
     }
@@ -212,7 +210,7 @@ static int ode_duffing(realtype t, N_Vector y, N_Vector ydot, void* user_data) {
     return(0);
 }
 
-static int jac_duffing(realtype t, N_Vector y, N_Vector fy, SUNMatrix J,
+static int jac_duffing(sunrealtype t, N_Vector y, N_Vector fy, SUNMatrix J,
                        void *user_data, N_Vector tmp1, N_Vector tmp2, N_Vector tmp3) {
     SimPara* para = (SimPara*) user_data;
 
@@ -220,7 +218,7 @@ static int jac_duffing(realtype t, N_Vector y, N_Vector fy, SUNMatrix J,
     jac_linear(t, y, fy, J, user_data, tmp1, tmp2, tmp3);
 
     /* Then add the Duffing terms */
-    realtype P1 = NV_Ith_S(y, 1);
+    sunrealtype P1 = NV_Ith_S(y, 1);
     for (int ii=0; ii<NEQ; ii++) {
         SM_ELEMENT_D(J, ii, 1) += - 3. * para->duff1 * para->a[ii][1] * P1*P1;
     }
@@ -229,15 +227,15 @@ static int jac_duffing(realtype t, N_Vector y, N_Vector fy, SUNMatrix J,
 }
 
 
-static int ode_josephson(realtype t, N_Vector y, N_Vector ydot, void* user_data) {
+static int ode_josephson(sunrealtype t, N_Vector y, N_Vector ydot, void* user_data) {
     SimPara* para = (SimPara*) user_data;
 
     /* First do the linear part */
     ode_linear(t, y, ydot, user_data);
 
     /* Then add the Josephson terms */
-    realtype P1 = NV_Ith_S(y, 1);
-    realtype PHI0 = para->phi0;
+    sunrealtype P1 = NV_Ith_S(y, 1);
+    sunrealtype PHI0 = para->phi0;
     for (int ii=0; ii<NEQ; ii++) {
         NV_Ith_S(ydot, ii) -= para->a[ii][1] * P1;  // remove linear term
         NV_Ith_S(ydot, ii) += para->a[ii][1] * PHI0/(2.*M_PI) * sin(2.*M_PI*P1/PHI0);  // add sine term
@@ -247,7 +245,7 @@ static int ode_josephson(realtype t, N_Vector y, N_Vector ydot, void* user_data)
 }
 
 
-static int jac_josephson(realtype t, N_Vector y, N_Vector fy, SUNMatrix J,
+static int jac_josephson(sunrealtype t, N_Vector y, N_Vector fy, SUNMatrix J,
                          void *user_data, N_Vector tmp1, N_Vector tmp2, N_Vector tmp3) {
     SimPara* para = (SimPara*) user_data;
 
@@ -255,8 +253,8 @@ static int jac_josephson(realtype t, N_Vector y, N_Vector fy, SUNMatrix J,
     jac_linear(t, y, fy, J, user_data, tmp1, tmp2, tmp3);
 
     /* Then add the Josephson terms */
-    realtype P1 = NV_Ith_S(y, 1);
-    realtype PHI0 = para->phi0;
+    sunrealtype P1 = NV_Ith_S(y, 1);
+    sunrealtype PHI0 = para->phi0;
     for (int ii=0; ii<NEQ; ii++) {
         SM_ELEMENT_D(J, ii, 1) -= para->a[ii][1];  // remove linear term
         SM_ELEMENT_D(J, ii, 1) += para->a[ii][1] * cos(2.*M_PI*P1/PHI0);  // add cosine term
@@ -267,10 +265,11 @@ static int jac_josephson(realtype t, N_Vector y, N_Vector fy, SUNMatrix J,
 
 
 int integrate_cvode(void* user_data,
-                    realtype* y0, realtype* tout_arr,
-                    realtype* outdata, int nout,
-                    realtype reltol, realtype abstol) {
-    int flag;
+                    sunrealtype* y0, sunrealtype* tout_arr,
+                    sunrealtype* outdata, int nout,
+                    sunrealtype reltol, sunrealtype abstol) {
+    SUNContext sunctx;
+    int retval;
     N_Vector y;
     void* cvode_mem;
     SimPara* para = (SimPara*) user_data;
@@ -278,10 +277,14 @@ int integrate_cvode(void* user_data,
     init_para(para);
 
     cvode_mem = NULL;
+
+    /* Create the SUNDIALS context */
+    retval = SUNContext_Create(SUN_COMM_NULL, &sunctx);
+    if (check_retval(&retval, "SUNContext_Create", 1)) { return (1); }
     
     /* Create serial vector of length NEQ for I.C. */
-    y = N_VNew_Serial(NEQ);
-    if (check_flag((void *)y, "N_VNew_Serial", 0)) return(1);
+    y = N_VNew_Serial(NEQ, sunctx);
+    if (check_retval((void *)y, "N_VNew_Serial", 0)) return(1);
 
     /* Initialize y */
     for (int ii=0;ii<NEQ;ii++) {
@@ -291,74 +294,74 @@ int integrate_cvode(void* user_data,
     /* Call CVodeCreate to create the solver memory
      * with stepping and iteration method */
     if (para->stiff_equation==true) {
-        cvode_mem = CVodeCreate(CV_BDF);
+        cvode_mem = CVodeCreate(CV_BDF, sunctx);
     } else {  // nonstiff
-        cvode_mem = CVodeCreate(CV_ADAMS);
+        cvode_mem = CVodeCreate(CV_ADAMS, sunctx);
     }
-    if (check_flag((void *)cvode_mem, "CVodeCreate", 0)) return(1);
+    if (check_retval((void *)cvode_mem, "CVodeCreate", 0)) return(1);
 
     /* Call CVodeInit to initialize the integrator memory and specify the
     * user's right hand side function in y'=f(t,y), the inital time T0, and
     * the initial dependent variable vector y. */
-    realtype T0 = tout_arr[0];
+    sunrealtype T0 = tout_arr[0];
     if (para->sys_id == ID_LINEAR) {
-        flag = CVodeInit(cvode_mem, ode_linear, T0, y);
+        retval = CVodeInit(cvode_mem, ode_linear, T0, y);
     } else if (para->sys_id == ID_DUFFING) {
-        flag = CVodeInit(cvode_mem, ode_duffing, T0, y);
+        retval = CVodeInit(cvode_mem, ode_duffing, T0, y);
     } else if (para->sys_id == ID_JOSEPHSON) {
-        flag = CVodeInit(cvode_mem, ode_josephson, T0, y);
+        retval = CVodeInit(cvode_mem, ode_josephson, T0, y);
     } else {
         printf("*** UNKNOWN FORCE ID: %d ***\n", para->sys_id);
         return(1);
     }
-    if (check_flag(&flag, "CVodeInit", 1)) return(1);
+    if (check_retval(&retval, "CVodeInit", 1)) return(1);
 
     /* Call CVodeSVtolerances to specify the scalar relative
      * and absolute tolerances */
-    flag = CVodeSStolerances(cvode_mem, reltol, abstol);
-    if (check_flag(&flag, "CVodeSStolerances", 1)) return(1);
+    retval = CVodeSStolerances(cvode_mem, reltol, abstol);
+    if (check_retval(&retval, "CVodeSStolerances", 1)) return(1);
 
     // /* Call CVodeRootInit to specify the root function g with 2 components */
-    // flag = CVodeRootInit(cvode_mem, 2, g);
-    // if (check_flag(&flag, "CVodeRootInit", 1)) return(1);
+    // retval = CVodeRootInit(cvode_mem, 2, g);
+    // if (check_retval(&retval, "CVodeRootInit", 1)) return(1);
 
     /* Create dense SUNMatrix for use in linear solves */
-    SUNMatrix A = SUNDenseMatrix(NEQ, NEQ);
-    if(check_flag((void *)A, "SUNDenseMatrix", 0)) return(1);
+    SUNMatrix A = SUNDenseMatrix(NEQ, NEQ, sunctx);
+    if(check_retval((void *)A, "SUNDenseMatrix", 0)) return(1);
 
     /* Create dense SUNLinearSolver object for use by CVode */
-    SUNLinearSolver LS = SUNDenseLinearSolver(y, A);
-    if(check_flag((void *)LS, "SUNDenseLinearSolver", 0)) return(1);
+    SUNLinearSolver LS = SUNLinSol_Dense(y, A, sunctx);
+    if(check_retval((void *)LS, "SUNLinSol_Dense", 0)) return(1);
 
     /* Call CVDlsSetLinearSolver to attach the matrix and linear solver to CVode */
-    flag = CVDlsSetLinearSolver(cvode_mem, LS, A);
-    if(check_flag(&flag, "CVDlsSetLinearSolver", 1)) return(1);
+    retval = CVodeSetLinearSolver(cvode_mem, LS, A);
+    if(check_retval(&retval, "CVodeSetLinearSolver", 1)) return(1);
 
     /* Set the user-supplied Jacobian routine Jac */
     if (para->sys_id == ID_LINEAR) {
-        flag = CVDlsSetJacFn(cvode_mem, jac_linear);
+        retval = CVodeSetJacFn(cvode_mem, jac_linear);
     } else if (para->sys_id == ID_DUFFING) {
-        flag = CVDlsSetJacFn(cvode_mem, jac_duffing);
+        retval = CVodeSetJacFn(cvode_mem, jac_duffing);
     } else if (para->sys_id == ID_JOSEPHSON) {
-        flag = CVDlsSetJacFn(cvode_mem, jac_josephson);
+        retval = CVodeSetJacFn(cvode_mem, jac_josephson);
     } else {
         printf("*** UNKNOWN FORCE ID: %d ***\n", para->sys_id);
         return(1);
     }
-    if (check_flag(&flag, "CVDlsSetJacFn", 1)) return(1);
+    if (check_retval(&retval, "CVDlsSetJacFn", 1)) return(1);
 
     // Set optional inputs
-    flag = CVodeSetUserData(cvode_mem, user_data);
-    if(check_flag(&flag, "CVodeSetUserData", 1)) return(1);
+    retval = CVodeSetUserData(cvode_mem, user_data);
+    if(check_retval(&retval, "CVodeSetUserData", 1)) return(1);
 
-    realtype tstop=0.0;
+    sunrealtype tstop=0.0;
     if (para->drive_id==ID_DRIVE_V) {
         para->drive_acc = gsl_interp_accel_alloc();
         para->drive_spline = gsl_spline_alloc(gsl_interp_cspline, nout);
         gsl_spline_init(para->drive_spline, tout_arr, para->drive_V_arr, nout);
         tstop = tout_arr[nout-1];
-        flag = CVodeSetStopTime(cvode_mem, tstop);
-        if(check_flag(&flag, "CVodeSetUserData", 1)) return(1);
+        retval = CVodeSetStopTime(cvode_mem, tstop);
+        if(check_retval(&retval, "CVodeSetUserData", 1)) return(1);
     }
     if (para->add_thermal_noise == true) {
         para->noise1_acc = gsl_interp_accel_alloc();
@@ -371,8 +374,8 @@ int integrate_cvode(void* user_data,
         gsl_spline_init(para->noise0_spline, tout_arr, para->noise0_arr, nout);
         if (tstop == 0.) {
             tstop = tout_arr[nout-1];
-            flag = CVodeSetStopTime(cvode_mem, tstop);
-            if(check_flag(&flag, "CVodeSetUserData", 1)) return(1);
+            retval = CVodeSetStopTime(cvode_mem, tstop);
+            if(check_retval(&retval, "CVodeSetUserData", 1)) return(1);
         }
     }
 
@@ -381,40 +384,40 @@ int integrate_cvode(void* user_data,
     for (int ii=0; ii<NEQ; ii++) {
         outdata[ii] = NV_Ith_S(y,ii);
     }
-    realtype tout, tret;
+    sunrealtype tout, tret;
     for(int tt=1; tt<nout; tt++){
         tout = tout_arr[tt];
-        flag = CVode(cvode_mem, tout, y, &tret, CV_NORMAL);
+        retval = CVode(cvode_mem, tout, y, &tret, CV_NORMAL);
 
         // Treat roots
-        while (flag==CV_ROOT_RETURN) {
+        while (retval==CV_ROOT_RETURN) {
             /*** do something here if wanted ***/
             // e.g. you could save the roots and return them...
 
             // Do time step
-            flag = CVode(cvode_mem, tout, y, &tret, CV_NORMAL);
+            retval = CVode(cvode_mem, tout, y, &tret, CV_NORMAL);
         }
 
-        if (check_flag(&flag, "CVode", 1)) break;
+        if (check_retval(&retval, "CVode", 1)) break;
 
 
-        if (flag == CV_SUCCESS) {
+        if (retval == CV_SUCCESS) {
             // Save result to output vectors
             // OBS: the 1st will be the given initial condition,
             // as in scipy.integrate.odeint
             for (int ii=0; ii<NEQ; ii++) {
                 outdata[tt*NEQ + ii] = NV_Ith_S(y,ii);     // P1, flux on node 1
             }
-        } else if (flag == CV_TSTOP_RETURN) {
+        } else if (retval == CV_TSTOP_RETURN) {
             printf("CVODE: Reached stopping point\n");
             printf("CV_TSTOP_RETURN: tt %d, nout %d, tout %g, tret %g, tstop %g\n", tt, nout, tout, tret, tstop);
             break;
         } else{
             // This shouldn't happen!
             // We already take care of roots
-            // and there is check_flag, but you never know...
+            // and there is check_retval, but you never know...
             printf("*** Something went wrong! ***\n");
-            printf("CVODE: Last error flag: %d \n", flag);
+            printf("CVODE: Last error flag: %d \n", retval);
             break;
         }
     }
@@ -447,39 +450,37 @@ int integrate_cvode(void* user_data,
 }
 
 
-/*
- * Check function return value...
- *   opt == 0 means SUNDIALS function allocates memory so check if
- *            returned NULL pointer
- *   opt == 1 means SUNDIALS function returns a flag so check if
- *            flag >= 0
- *   opt == 2 means function allocates memory so check if returned
- *            NULL pointer 
- */
-
-static int check_flag(void *flagvalue, char *funcname, int opt)
+static int check_retval(void* returnvalue, const char* funcname, int opt)
 {
-  int *errflag;
+  int* retval;
 
   /* Check if SUNDIALS function returned NULL pointer - no memory allocated */
-  if (opt == 0 && flagvalue == NULL) {
+  if (opt == 0 && returnvalue == NULL)
+  {
     fprintf(stderr, "\nSUNDIALS_ERROR: %s() failed - returned NULL pointer\n\n",
-        funcname);
-    return(1); }
+            funcname);
+    return (1);
+  }
 
-  /* Check if flag < 0 */
-  else if (opt == 1) {
-    errflag = (int *) flagvalue;
-    if (*errflag < 0) {
-      fprintf(stderr, "\nSUNDIALS_ERROR: %s() failed with flag = %d\n\n",
-          funcname, *errflag);
-      return(1); }}
+  /* Check if retval < 0 */
+  else if (opt == 1)
+  {
+    retval = (int*)returnvalue;
+    if (*retval < 0)
+    {
+      fprintf(stderr, "\nSUNDIALS_ERROR: %s() failed with retval = %d\n\n",
+              funcname, *retval);
+      return (1);
+    }
+  }
 
   /* Check if function returned NULL pointer - no memory allocated */
-  else if (opt == 2 && flagvalue == NULL) {
+  else if (opt == 2 && returnvalue == NULL)
+  {
     fprintf(stderr, "\nMEMORY_ERROR: %s() failed - returned NULL pointer\n\n",
-        funcname);
-    return(1); }
+            funcname);
+    return (1);
+  }
 
-  return(0);
+  return (0);
 }
